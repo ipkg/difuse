@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package netrpc;
+
+import "github.com/euforia/go-chord/net.proto";
+
+service DifuseRPC {
+    rpc GetTxServe(chord.Payload) returns (chord.Payload) {}
+    rpc AppendTxServe(chord.Payload) returns (chord.Payload) {}
+    rpc LastTxServe(chord.Payload) returns (chord.Payload) {}
+
+    rpc StatServe(chord.Payload) returns (chord.Payload) {}
+
+    rpc GetBlockServe(chord.Payload) returns (chord.Payload) {}
+    rpc SetBlockServe(chord.Payload) returns (chord.Payload) {}
+    rpc DeleteBlockServe(chord.Payload) returns (chord.Payload) {}
+
+    rpc ReplicateBlocksServe(stream chord.Payload)returns (chord.Payload) {}
+    rpc ReplicateTxServe(stream chord.Payload)returns (chord.Payload) {}
+
+    rpc LookupLeaderServe(chord.Payload)returns (chord.Payload) {}
+}

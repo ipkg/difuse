@@ -1,0 +1,16 @@
+package: github.com/ipkg/difuse
+import:
+- package: github.com/btcsuite/fastsha256
+- package: github.com/euforia/go-chord
+- package: github.com/golang/protobuf
+  subpackages:
+  - proto
+- package: github.com/google/flatbuffers
+  subpackages:
+  - go
+- package: github.com/tv42/base58
+- package: github.com/xsleonard/go-merkle
+- package: golang.org/x/net
+  subpackages:
+  - context
+- package: google.golang.org/grpc

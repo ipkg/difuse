@@ -1,0 +1,74 @@
+//include "euforia/go-chord/fbtypes.fbs";
+namespace fbtypes;
+
+table RequestOptions {
+    Consistency: byte;
+}
+
+table ByteSlice {
+    B:[ubyte];
+}
+
+table Inode {
+    Id: [ubyte];
+    Size: long;
+    // if inline is true, then the data is actually store in the first element of
+    // the Blocks slice.
+    Inline: bool;
+    Blocks: [ByteSlice];
+}
+
+table VnodeIdInodeErr {
+    Id:[ubyte];
+    Inode: Inode;
+    E: string;
+}
+
+table VnodeIdInodeErrList {
+    L:[VnodeIdInodeErr];
+}
+
+table Tx {
+    Key: [ubyte];
+    PrevHash:[ubyte];
+    Source: [ubyte];
+    Destination: [ubyte];
+    Signature: [ubyte];
+    Data: [ubyte];
+}
+
+table VnodeIdTxErr {
+    Id: [ubyte];
+    Tx: Tx;
+    E: string;
+}
+
+table VnodeIdTxErrList {
+    L: [VnodeIdTxErr];
+}
+
+table VnodeIdsTwoByteSlices {
+    Ids: [ByteSlice];
+    B1: [ubyte];
+    B2: [ubyte];
+}
+
+table VnodeIdsTx {
+    Ids:[ByteSlice];
+    Tx: Tx;
+}
+
+table VnodeIdBytesErr {
+    Id: [ubyte];
+    B: [ubyte];
+    E: string;
+}
+
+table VnodeIdBytesErrList {
+    L: [VnodeIdBytesErr];
+}
+
+table VnodeIdsBytes {
+    Ids:[ByteSlice];
+    B: [ubyte];
+}

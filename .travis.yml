@@ -1,0 +1,11 @@
+language: go
+
+go:
+  - 1.7.3
+
+install:
+  - make prep deps
+
+script:
+  - make test
+  - make dist
