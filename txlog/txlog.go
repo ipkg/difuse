@@ -9,7 +9,7 @@ import (
 const (
 	defaultTxBufIn = 32
 
-	errPrevHash = "previous hash mismatch: %x!=%x"
+	errPrevHash = "previous hash want=%x have=%x"
 )
 
 var (
@@ -88,14 +88,14 @@ func (txl *TxLog) AppendTx(ktx *Tx) error {
 	if ltx != nil {
 		lh := ltx.Hash()
 		if !EqualBytes(lh, ktx.PrevHash) {
-			return fmt.Errorf(errPrevHash, lh, ktx.PrevHash)
+			return fmt.Errorf(errPrevHash, lh[:8], ktx.PrevHash[:8])
 		}
 	} else {
 		// If last tx is found make sure this tx's previous hash is zero i.e
 		// the first tx for this key.
 		zh := ZeroHash()
 		if !EqualBytes(ktx.PrevHash, zh) {
-			return fmt.Errorf(errPrevHash, ktx.PrevHash, zh)
+			return fmt.Errorf(errPrevHash, zh[:8], ktx.PrevHash[:8])
 		}
 	}
 
@@ -129,21 +129,32 @@ func (txl *TxLog) updateQLastTx(ktx *Tx) {
 // applyTx applies a transaction to the log.
 func (txl *TxLog) applyTx(ktx *Tx) error {
 
-	err := txl.fsm.Apply(ktx)
-	if err != nil {
+	/*err := txl.fsm.Apply(ktx)
+		if err != nil {
+			return err
+		}
+
+		if err = txl.store.Add(ktx); err == nil {
+			// update last tx taking into account the tx buffer
+			txl.txlock.Lock()
+			if v, ok := txl.lastQTx[string(ktx.Key)]; ok && EqualBytes(ktx.Hash(), v.Hash()) {
+				delete(txl.lastQTx, string(ktx.Key))
+			}
+			txl.txlock.Unlock()
+		}
+	return err
+	*/
+	if err := txl.store.Add(ktx); err != nil {
 		return err
 	}
-
-	if err = txl.store.Add(ktx); err == nil {
-		// update last tx taking into account the tx buffer
-		txl.txlock.Lock()
-		if v, ok := txl.lastQTx[string(ktx.Key)]; ok && EqualBytes(ktx.Hash(), v.Hash()) {
-			delete(txl.lastQTx, string(ktx.Key))
-		}
-		txl.txlock.Unlock()
+	txl.txlock.Lock()
+	if v, ok := txl.lastQTx[string(ktx.Key)]; ok && EqualBytes(ktx.Hash(), v.Hash()) {
+		delete(txl.lastQTx, string(ktx.Key))
 	}
+	txl.txlock.Unlock()
 
-	return err
+	return txl.fsm.Apply(ktx)
+
 }
 
 // Shutdown closes the incoming tx channel and waits for a shutdown from the loop.

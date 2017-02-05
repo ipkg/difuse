@@ -10,7 +10,7 @@ import (
 // Init initializes a log backed datastore for the given vnode
 func (s *Difuse) Init(local *chord.Vnode) {
 	vstore := store.NewMemLoggedStore(local, s.signator)
-	s.transport.Register(local, vstore)
+	s.transport.RegisterVnode(local, vstore)
 }
 
 // NewPredecessor is called when a new predecessor is found
@@ -29,8 +29,6 @@ func (s *Difuse) NewPredecessor(local, remoteNew, remotePrev *chord.Vnode) {
 	// TODO: queue rather than running right away
 	if err := s.transport.ReplicateTx(local, remoteNew); err != nil {
 		log.Printf("action=replicate status=failed src=%s dst=%s msg='%v'", shortID(local), shortID(remoteNew), err)
-	} else {
-		log.Printf("action=replicate status=ok src=%s dst=%s", shortID(local), shortID(remoteNew))
 	}
 }
 

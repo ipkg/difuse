@@ -3,7 +3,7 @@
 PORT=$1
 COUNT=$2
 PREFIX=$3
-VALUE_PREFIX=$4
+#VALUE_PREFIX=$4
 
 
 if [ "${PORT}" == "" ]; then
@@ -18,12 +18,13 @@ if [ "${PREFIX}" == "" ]; then
     PREFIX="key"
 fi
 
-if [ "${VALUE_PREFIX}" == "" ]; then
-    VALUE_PREFIX="value"
-fi
+#if [ "${VALUE_PREFIX}" == "" ]; then
+#    VALUE_PREFIX="value"
+#fi
 
 for i in `seq ${COUNT}`; do
     echo "* Key: ${PREFIX}${i}"
-    curl -i localhost:${PORT}/${PREFIX}${i} -d ${VALUE_PREFIX}${i}
+    d=`date '+%d.%m.%Y-%H:%M:%S'`
+    curl -i localhost:${PORT}/${PREFIX}${i} -d "${i}-${d}"
     echo -e "\n-"
 done

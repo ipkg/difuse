@@ -8,8 +8,11 @@ service DifuseRPC {
     rpc GetTxServe(chord.Payload) returns (chord.Payload) {}
     rpc AppendTxServe(chord.Payload) returns (chord.Payload) {}
     rpc LastTxServe(chord.Payload) returns (chord.Payload) {}
+    rpc MerkleRootTxServe(chord.Payload) returns (chord.Payload) {}
 
     rpc StatServe(chord.Payload) returns (chord.Payload) {}
+    rpc SetInodeServe(chord.Payload) returns (chord.Payload) {}
+    rpc DeleteInodeServe(chord.Payload) returns (chord.Payload) {}
 
     rpc GetBlockServe(chord.Payload) returns (chord.Payload) {}
     rpc SetBlockServe(chord.Payload) returns (chord.Payload) {}

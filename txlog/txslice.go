@@ -43,7 +43,7 @@ func (txs TxSlice) MerkleTree() (*merkle.Tree, error) {
 	data := make([][]byte, len(txs))
 	for i, tx := range txs {
 		// Here data is provided as the merkellib takes in a hash function
-		data[i] = tx.bytesToGenHash()
+		data[i] = tx.Hash()
 	}
 
 	tree := merkle.NewTree()

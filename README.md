@@ -35,6 +35,7 @@ or [http://localhost:9091](http://localhost:9091)
 ## Roadmap
 
 - **v1.0**
+    - [ ] Multiple consistency levels.
 
 
 ## Design

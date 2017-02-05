@@ -15,6 +15,8 @@ table Inode {
     // if inline is true, then the data is actually store in the first element of
     // the Blocks slice.
     Inline: bool;
+    // Merkle root of transactions
+    Root: [ubyte];
     Blocks: [ByteSlice];
 }
 

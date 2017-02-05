@@ -48,6 +48,8 @@ func init() {
 	}
 
 	cfg.SetPeers(*joinAddrs)
+
+	log.SetPrefix(fmt.Sprintf("[%s] ", cfg.Chord.Hostname))
 }
 
 func main() {

@@ -70,12 +70,12 @@ func TestDifuseLookupLeader(t *testing.T) {
 
 	testkey := []byte("test-key-for-leader-election")
 
-	lvn1, _, vm1, err := s1.LookupLeader(testkey)
+	lvn1, _, vm1, err := s1.transport.LookupLeader("127.0.0.1:12346", testkey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	lvn2, _, vm2, err := s2.LookupLeader(testkey)
+	lvn2, _, vm2, err := s2.transport.LookupLeader("127.0.0.1:12345", testkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestDifuseSetStat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	<-time.After(200 * time.Millisecond)
+	<-time.After(300 * time.Millisecond)
 
 	s2, err := prepDifuse(23467, "127.0.0.1:23456")
 	if err != nil {
@@ -120,7 +120,7 @@ func TestDifuseSetStat(t *testing.T) {
 	testval := []byte("testvalue")
 	testInode := store.NewInodeFromData(testkey, testval)
 
-	if err = s1.SetInode(testInode); err != nil {
+	if _, err = s1.SetInode(testInode, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -151,11 +151,11 @@ func TestDifuseSetStat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = s1.Set(testkey, testval); err != nil {
+	if _, err = s2.Set(testkey, testval); err != nil {
 		t.Fatal(err)
 	}
 
-	val, err := s2.Get(testkey)
+	val, err := s1.Get(testkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,12 +163,14 @@ func TestDifuseSetStat(t *testing.T) {
 		t.Fatal("value mismatch")
 	}
 
-	if err = s2.Delete(testkey); err == nil {
-		t.Fatal("should fail")
+	if _, err = s2.Delete(testkey); err != nil {
+		//t.Fatal("should fail")
+		t.Fatal(err)
 	}
 
-	if err = s1.Delete(testkey); err != nil {
-		t.Fatal(err)
+	//<-time.After(1 * time.Second)
+	if _, err = s1.Delete(testkey); err == nil {
+		t.Fatal("should fail")
 	}
 
 }

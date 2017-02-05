@@ -1,9 +1,9 @@
 package difuse
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"log"
 
 	"github.com/btcsuite/fastsha256"
 	flatbuffers "github.com/google/flatbuffers/go"
@@ -16,7 +16,11 @@ import (
 
 const (
 	errInvalidDataType = "invalid data type: %#v"
-	errNotLeader       = "not leader: %s"
+)
+
+var (
+	// ErrNotLeader is error not leader
+	ErrNotLeader = errors.New("not leader")
 )
 
 // VnodeStore implements an actual persistent store.
@@ -26,17 +30,19 @@ type VnodeStore interface {
 	NewTx(key []byte) (*txlog.Tx, error)
 	LastTx(key []byte) (*txlog.Tx, error)
 	IterTx(func([]byte, txlog.TxSlice) error) error
-	// MerkleRoot of transactions for the given key
-	MerkleRoot(key []byte) ([]byte, error)
+	// MerkleRoot of all transactions for the given key
+	MerkleRootTx(key []byte) ([]byte, error)
+
 	// Iterate over all inodes in the store.
 	IterInodes(func([]byte, *store.Inode) error) error
 	Stat(key []byte) (*store.Inode, error)
-	// This sets the value without any transactions returning the key hash. This is used to set
-	// content addressable data.
+
+	// This sets the value without the use of transactions returning the hash of the data
+	// as the key.
 	SetBlock(data []byte) ([]byte, error)
 	GetBlock(hash []byte) ([]byte, error)
 	DeleteBlock(hash []byte) error
-	// Block iteration
+	// Iterate over all blocks in the store.
 	IterBlocks(func([]byte, []byte) error) error
 
 	Snapshot() (io.ReadCloser, error)
@@ -47,31 +53,44 @@ type VnodeStore interface {
 type Transport interface {
 	// Stat returns the inode entries from the specified vnodes for the given key
 	Stat(key []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
+	// Set the inode on the given host returning the leader vnode or error
+	SetInode(string, *store.Inode, *RequestOptions) (*chord.Vnode, error)
+	// Delete the inode on the given host returning the leader vnode or error
+	DeleteInode(string, *store.Inode, *RequestOptions) (*chord.Vnode, error)
 
 	// Block data is directly on the vnode. This is used when the transaction log is not
 	// needed.  Data set using this call should be stored seperately from the transactional
-	// data and is stored as content addressable.
+	// data in terms of physicality.
 	SetBlock([]byte, *RequestOptions, ...*chord.Vnode) ([]*VnodeResponse, error)
 	GetBlock([]byte, *RequestOptions, ...*chord.Vnode) ([]*VnodeResponse, error)
 	DeleteBlock([]byte, *RequestOptions, ...*chord.Vnode) ([]*VnodeResponse, error)
+	// Replicate blocks from the local vnode to the remote one.
 	ReplicateBlocks(src, dst *chord.Vnode) error
 
 	AppendTx(tx *txlog.Tx, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
 	GetTx(key, txhash []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
 	LastTx(key []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
+	MerkleRootTx(key []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
 	NewTx(key []byte, vs ...*chord.Vnode) ([]*VnodeResponse, error)
+	// Replicate transactions from the local vnode to the remote one.
 	ReplicateTx(src, dst *chord.Vnode) error
 
+	// Lookup the leader for the given key on the given host returning the leader, an ordered list of
+	// other vnodes as well as a host-to-vnode map.
 	LookupLeader(host string, key []byte) (*chord.Vnode, []*chord.Vnode, map[string][]*chord.Vnode, error)
 
-	// Register registers a datastore for a vnode.
-	Register(*chord.Vnode, VnodeStore)
-	RegisterElector(elector LeaderElector)
+	// RegisterVnode registers a datastore for a vnode.
+	RegisterVnode(*chord.Vnode, VnodeStore)
+	Register(ConsistentStore)
 }
 
-// LeaderElector implements the leader election algorithm.
-type LeaderElector interface {
+// ConsistentStore implements consistent store methods using the underlying ring methods.
+type ConsistentStore interface {
 	LookupLeader(key []byte) (*chord.Vnode, []*chord.Vnode, map[string][]*chord.Vnode, error)
+	// SetInode sets the given inode returning the leader for the inode and error
+	SetInode(inode *store.Inode, options *RequestOptions) (*chord.Vnode, error)
+	// DeleteInode deletes the given inode returning the leader for the inode and error
+	DeleteInode(inode *store.Inode, options *RequestOptions) (*chord.Vnode, error)
 }
 
 // Difuse is the core engine
@@ -100,22 +119,7 @@ func NewDifuse(conf *Config, trans Transport) *Difuse {
 // RegisterRing registers the chord ring to the difuse instance.
 func (s *Difuse) RegisterRing(ring *chord.Ring) {
 	s.ring = ring
-	s.transport.RegisterElector(s)
-}
-
-// isLeader returns whether this host owns the provided leader vnode
-func (s *Difuse) isLeader(vn *chord.Vnode) bool {
-	return s.config.Chord.Hostname == vn.Host
-}
-
-// Delete deletes an inode associated to the given key based on provided options.
-func (s *Difuse) Delete(key []byte, options ...RequestOptions) error {
-	inode, err := s.Stat(key, options...)
-	if err != nil {
-		return err
-	}
-
-	return s.DeleteInode(inode, options...)
+	s.transport.Register(s)
 }
 
 // Get retrieves a the given key.  It first gets the inode then retrieves the underlying
@@ -139,110 +143,80 @@ func (s *Difuse) Get(key []byte, options ...RequestOptions) ([]byte, error) {
 	return out, nil
 }
 
+// Delete deletes an inode associated to the given key based on provided options. Returns
+// the leader vnode and error
+func (s *Difuse) Delete(key []byte, options ...RequestOptions) (*chord.Vnode, error) {
+	inode, err := s.Stat(key, options...)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(options) > 0 {
+		return s.DeleteInode(inode, &options[0])
+	}
+	return s.DeleteInode(inode, nil)
+}
+
 // Set sets a key to the given value.  It first sets the underlying block data then
-// sets the inode.
-func (s *Difuse) Set(key, value []byte, options ...RequestOptions) error {
+// sets the inode.  Returns the leader vnode and error
+func (s *Difuse) Set(key, value []byte, options ...RequestOptions) (*chord.Vnode, error) {
 	hsh, err := s.SetBlock(value, options...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	inode := store.NewInode(key)
 	inode.Size = int64(len(value))
 	inode.Blocks = [][]byte{hsh}
 
-	return s.SetInode(inode, options...)
-}
-
-func (s *Difuse) appendTx(txtype byte, id, data []byte, opts *RequestOptions) error {
-
-	switch opts.Consistency {
-	case ConsistencyLeader:
-		l, _, vm, err := s.LookupLeader(id)
-		if err != nil {
-			return err
-		}
-
-		if !s.isLeader(l) {
-			return fmt.Errorf(errNotLeader, shortID(l))
-		}
-		// Get new tx from leader
-		rsp, err := s.transport.NewTx(id, l)
-		if err != nil {
-			return err
-		}
-		if rsp[0].Err != nil {
-			return rsp[0].Err
-		}
-		tx, ok := rsp[0].Data.(*txlog.Tx)
-		if !ok {
-			return fmt.Errorf(errInvalidDataType, tx)
-		}
-
-		tx.Data = append([]byte{txtype}, data...)
-		if err = tx.Sign(s.signator); err != nil {
-			return err
-		}
-		// Append the new tx
-		vns := vm[l.Host]
-		resp, err := s.transport.AppendTx(tx, opts, vns...)
-		if err != nil {
-			return err
-		}
-		if resp[0].Err != nil {
-			return resp[0].Err
-		}
-
-		delete(vm, l.Host)
-
-		go func(vmap map[string][]*chord.Vnode, ktx *txlog.Tx, options RequestOptions) {
-			for _, vns := range vmap {
-				resp, err := s.transport.AppendTx(ktx, &options, vns...)
-				if err != nil {
-					log.Println("ERR", err)
-					continue
-				}
-
-				if resp[0].Err != nil {
-					log.Println("ERR", resp[0].Err)
-				}
-			}
-		}(vm, tx, *opts)
-
-		return nil
+	if len(options) > 0 {
+		return s.SetInode(inode, &options[0])
 	}
-
-	return fmt.Errorf(errInvalidConsistencyLevel, opts.Consistency)
-
+	return s.SetInode(inode, nil)
 }
 
 // DeleteInode deletes the given inode.  It only deletes the inode and not the underlying data.
-func (s *Difuse) DeleteInode(inode *store.Inode, options ...RequestOptions) error {
+// It returns the leader and error
+func (s *Difuse) DeleteInode(inode *store.Inode, options *RequestOptions) (*chord.Vnode, error) {
 	var opts *RequestOptions
 	if options != nil {
-		opts = &options[0]
+		opts = options
 	} else {
 		opts = &RequestOptions{Consistency: ConsistencyLeader}
 	}
 
 	fb := flatbuffers.NewBuilder(0)
 	fb.Finish(inode.Serialize(fb))
-	return s.appendTx(store.TxTypeSet, inode.Id, fb.Bytes[fb.Head():], opts)
+
+	lvn, err := s.appendTx(store.TxTypeDelete, inode.Id, fb.Bytes[fb.Head():], opts)
+	if err == ErrNotLeader {
+		// TODO: Redirect to leader
+		return s.transport.DeleteInode(lvn.Host, inode, opts)
+	}
+
+	return lvn, err
 }
 
 // SetInode takes the given inode, creates a set tx and submits it based on the
-// given consistency level.
-func (s *Difuse) SetInode(inode *store.Inode, options ...RequestOptions) error {
+// given consistency level. It returns the leader and error
+func (s *Difuse) SetInode(inode *store.Inode, options *RequestOptions) (*chord.Vnode, error) {
 	var opts *RequestOptions
 	if options != nil {
-		opts = &options[0]
+		opts = options
 	} else {
 		opts = &RequestOptions{Consistency: ConsistencyLeader}
 	}
 
 	fb := flatbuffers.NewBuilder(0)
 	fb.Finish(inode.Serialize(fb))
-	return s.appendTx(store.TxTypeSet, inode.Id, fb.Bytes[fb.Head():], opts)
+
+	lvn, err := s.appendTx(store.TxTypeSet, inode.Id, fb.Bytes[fb.Head():], opts)
+	if err == ErrNotLeader {
+		// TODO: Redirect to leader
+		return s.transport.SetInode(lvn.Host, inode, opts)
+	}
+
+	return lvn, err
 }
 
 // Stat returns the inode entry for the key. By default it uses the leader consistency
@@ -363,7 +337,7 @@ func (s *Difuse) GetBlock(hash []byte, options ...RequestOptions) ([]byte, error
 	return nil, fmt.Errorf(errInvalidConsistencyLevel, opts.Consistency)
 }
 
-// SetBlock sets the block data based on theh options returning the hash key
+// SetBlock sets the block data on all vnodes based on the options returning the hash key
 // for the data or an error
 func (s *Difuse) SetBlock(data []byte, options ...RequestOptions) ([]byte, error) {
 	var opts *RequestOptions
@@ -403,6 +377,11 @@ func (s *Difuse) SetBlock(data []byte, options ...RequestOptions) ([]byte, error
 	return nil, fmt.Errorf(errInvalidConsistencyLevel, opts.Consistency)
 }
 
+// DeleteBlock deletes the block from all vnodes based on the specified consistency.
+func (s *Difuse) DeleteBlock(hash []byte, options ...RequestOptions) error {
+	return fmt.Errorf("TBI")
+}
+
 // LookupLeader does a lookup on the key and returns the leader for the key, vnodes
 // used to compute the leader
 func (s *Difuse) LookupLeader(key []byte) (*chord.Vnode, []*chord.Vnode, map[string][]*chord.Vnode, error) {
@@ -413,68 +392,4 @@ func (s *Difuse) LookupLeader(key []byte) (*chord.Vnode, []*chord.Vnode, map[str
 
 	l, vm, err := s.keyleader(key, vs)
 	return l, vs, vm, err
-}
-
-func (s *Difuse) keyleader(key []byte, vs []*chord.Vnode) (lvn *chord.Vnode, vm map[string][]*chord.Vnode, err error) {
-	vm = vnodesByHost(vs)
-
-	quorum := (len(vs) / 2) + 1
-	lm := make(map[string][]*VnodeResponse)
-	var i int
-
-	// Get the last tx for the first n vnodes satisfying quorum.  Traverse input
-	// vnode slice to maintain order
-	for _, vn := range vs {
-		if i > quorum {
-			break
-		}
-		// Already visited this host and all of its vnoes
-		if _, ok := lm[vn.Host]; ok {
-			continue
-		}
-		// Get the last tx for all vn's on the host
-		vns := vm[vn.Host]
-		resp, e := s.transport.LastTx(key, nil, vns...)
-		if e != nil {
-			continue
-		}
-		// Add tx's to the host's response list
-		lm[vn.Host] = resp
-		i++
-	}
-
-	// Count votes for each tx.
-	txvote := make(map[string][]string)
-	for host, vl := range lm {
-		for _, vr := range vl {
-			var hk string
-			if vr.Err != nil {
-				hk = "00000000000000000000000000000000"
-			} else {
-				tx := vr.Data.(*txlog.Tx)
-				hk = fmt.Sprintf("%x", tx.Hash())
-			}
-
-			if _, ok := txvote[hk]; !ok {
-				txvote[hk] = []string{host}
-			} else {
-				txvote[hk] = append(txvote[hk], host)
-			}
-		}
-	}
-
-	// Get tx with max votes
-	leaderTx, _ := maxVotes(txvote)
-	// Get all hosts with this tx hash
-	candidates := txvote[leaderTx]
-	// Get first vn in the supplied list and candidates to elect as leader
-	for _, v := range vs {
-		if hasCandidate(candidates, v.Host) {
-			lvn = v
-			return
-		}
-	}
-
-	err = fmt.Errorf("could not find leader vnode: %s", key)
-	return
 }

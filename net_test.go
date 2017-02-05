@@ -58,9 +58,9 @@ func TestNetTransportBlock(t *testing.T) {
 	st1 := store.NewMemLoggedStore(vn1, kp1)
 	st2 := store.NewMemLoggedStore(vn2, kp1)
 	st3 := store.NewMemLoggedStore(vn3, kp1)
-	nt1.Register(vn1, st1)
-	nt1.Register(vn2, st2)
-	nt1.Register(vn3, st3)
+	nt1.RegisterVnode(vn1, st1)
+	nt1.RegisterVnode(vn2, st2)
+	nt1.RegisterVnode(vn3, st3)
 
 	vs := []*chord.Vnode{vn1, vn2}
 
@@ -140,9 +140,9 @@ func TestNetTransportTx(t *testing.T) {
 	st1 := store.NewMemLoggedStore(vn1, kp1)
 	st2 := store.NewMemLoggedStore(vn2, kp1)
 	st3 := store.NewMemLoggedStore(vn3, kp1)
-	nt1.Register(vn1, st1)
-	nt1.Register(vn2, st2)
-	nt1.Register(vn3, st3)
+	nt1.RegisterVnode(vn1, st1)
+	nt1.RegisterVnode(vn2, st2)
+	nt1.RegisterVnode(vn3, st3)
 
 	inode1 := store.NewInodeFromData([]byte("key"), []byte("foobar"))
 	fb := flatbuffers.NewBuilder(0)
@@ -267,4 +267,22 @@ func TestNetTransportTx(t *testing.T) {
 	if string(ind.Id) != "key" {
 		t.Fatal("inode id mismatch")
 	}
+
+	mr, err := nt1.MerkleRootTx([]byte("key"), nil, vn1, vn3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range mr {
+		if r.Err != nil {
+			t.Error(r.Err)
+		}
+	}
+
+	mr1 := mr[0].Data.([]byte)
+	mr2 := mr[1].Data.([]byte)
+
+	if !txlog.EqualBytes(mr1, mr2) {
+		t.Fatal("merkle mismatch")
+	}
+
 }

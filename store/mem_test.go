@@ -130,9 +130,16 @@ func TestStore(t *testing.T) {
 	}
 }
 
-func TestInodeMarshalJSON(t *testing.T) {
+func TestInode(t *testing.T) {
 	inode := NewInodeFromData([]byte("key"), []byte("data"))
 	if _, err := json.Marshal(inode); err != nil {
 		t.Fatal(err)
+	}
+	if len(inode.txroot) == 0 {
+		t.Fatal("txroot not set")
+	}
+
+	if !txlog.EqualBytes(txlog.ZeroHash(), inode.TxRoot()) {
+		t.Fatal("txroot should be zero")
 	}
 }

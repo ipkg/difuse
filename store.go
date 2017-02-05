@@ -1,10 +1,15 @@
 package difuse
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ipkg/difuse/txlog"
 	chord "github.com/ipkg/go-chord"
+)
+
+var (
+	errStoreNotFound = errors.New("store not found")
 )
 
 // localStore is a store containing all tx backed stores for the node.  It also
@@ -12,11 +17,11 @@ import (
 type localStore map[string]VnodeStore
 
 // GetStore returns a store for the given id.  If not found it returns nil
-func (nls localStore) GetStore(id []byte) VnodeStore {
+func (nls localStore) GetStore(id []byte) (VnodeStore, error) {
 	if s, ok := nls[fmt.Sprintf("%x", id)]; ok {
-		return s
+		return s, nil
 	}
-	return nil
+	return nil, errStoreNotFound
 }
 
 /*// Snapshot snapshots a vnode store returning a Reader
@@ -38,24 +43,6 @@ func (nls localStore) Restore(vn *chord.Vnode, r io.Reader) error {
 
 	return st.Restore(r)
 }*/
-
-// AppendTx appends a keyed tx to the given vnodes.  All vnodes in the slice are assumed to be local vnodes.
-// TODO: support consistency level
-func (nls localStore) AppendTx(tx *txlog.Tx, opts *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error) {
-	resp := make([]*VnodeResponse, len(vs))
-
-	for i, vn := range vs {
-		r := &VnodeResponse{Id: vn.Id, Data: []byte{}}
-		if store := nls.GetStore(vn.Id); store != nil {
-			r.Err = store.AppendTx(tx)
-		} else {
-			r.Err = fmt.Errorf("target vn not found: %x", vn.Id)
-		}
-		resp[i] = r
-	}
-
-	return resp, nil
-}
 
 // Stat gets a key from the local stores based on the consistency level.  All vnodes in the slice are assumed to be local vnodes
 func (nls localStore) Stat(key []byte, opts *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error) {
@@ -88,11 +75,11 @@ func (nls localStore) Stat(key []byte, opts *RequestOptions, vs ...*chord.Vnode)
 
 	for i, vn := range vs {
 		r := &VnodeResponse{Id: vn.Id}
-		if store := nls.GetStore(vn.Id); store != nil {
+		store, err := nls.GetStore(vn.Id)
+		if err == nil {
 			r.Data, r.Err = store.Stat(key)
-
 		} else {
-			r.Err = fmt.Errorf("target vn not found: %x", vn.Id)
+			r.Err = err
 		}
 		resp[i] = r
 	}
@@ -110,6 +97,42 @@ func (nls localStore) Stat(key []byte, opts *RequestOptions, vs ...*chord.Vnode)
 	default:
 		return nil, errInvalidConsistencyLevel
 	}*/
+
+	return resp, nil
+}
+
+func (nls localStore) MerkleRootTx(key []byte, opts *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error) {
+	resp := make([]*VnodeResponse, len(vs))
+
+	for i, vn := range vs {
+		r := &VnodeResponse{Id: vn.Id, Data: []byte{}}
+		store, err := nls.GetStore(vn.Id)
+		if err == nil {
+			r.Data, r.Err = store.MerkleRootTx(key)
+		} else {
+			r.Err = err
+		}
+		resp[i] = r
+	}
+
+	return resp, nil
+}
+
+// AppendTx appends a keyed tx to the given vnodes.  All vnodes in the slice are assumed to be local vnodes.
+// TODO: support consistency level
+func (nls localStore) AppendTx(tx *txlog.Tx, opts *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error) {
+	resp := make([]*VnodeResponse, len(vs))
+
+	for i, vn := range vs {
+		r := &VnodeResponse{Id: vn.Id, Data: []byte{}}
+		store, err := nls.GetStore(vn.Id)
+		if err == nil {
+			r.Err = store.AppendTx(tx)
+		} else {
+			r.Err = err
+		}
+		resp[i] = r
+	}
 
 	return resp, nil
 }
@@ -154,10 +177,11 @@ func (nls localStore) GetTx(key, txhash []byte, opts *RequestOptions, ids ...*ch
 	resp := make([]*VnodeResponse, len(ids))
 	for i, vn := range ids {
 		r := &VnodeResponse{Id: vn.Id}
-		if store := nls.GetStore(vn.Id); store != nil {
+		store, err := nls.GetStore(vn.Id)
+		if err == nil {
 			r.Data, r.Err = store.GetTx(key, txhash)
 		} else {
-			r.Err = fmt.Errorf("target vn not found: %x", vn.Id)
+			r.Err = err
 		}
 		resp[i] = r
 	}
@@ -210,10 +234,11 @@ func (nls localStore) LastTx(key []byte, opts *RequestOptions, ids ...*chord.Vno
 	resp := make([]*VnodeResponse, len(ids))
 	for i, vn := range ids {
 		r := &VnodeResponse{Id: vn.Id}
-		if store := nls.GetStore(vn.Id); store != nil {
+		store, err := nls.GetStore(vn.Id)
+		if err == nil {
 			r.Data, r.Err = store.LastTx(key)
 		} else {
-			r.Err = fmt.Errorf("target vn not found: %x", vn.Id)
+			r.Err = err
 		}
 		resp[i] = r
 	}
@@ -229,10 +254,11 @@ func (nls localStore) NewTx(key []byte, vl ...*chord.Vnode) ([]*VnodeResponse, e
 	resp := make([]*VnodeResponse, len(vl))
 	for i, vn := range vl {
 		r := &VnodeResponse{Id: vn.Id}
-		if store := nls.GetStore(vn.Id); store != nil {
+		store, err := nls.GetStore(vn.Id)
+		if err == nil {
 			r.Data, r.Err = store.NewTx(key)
 		} else {
-			r.Err = fmt.Errorf("target vn not found: %x", vn.Id)
+			r.Err = err
 		}
 		resp[i] = r
 	}
@@ -246,10 +272,11 @@ func (nls localStore) GetBlock(key []byte, opts *RequestOptions, ids ...*chord.V
 
 	for i, vn := range ids {
 		r := &VnodeResponse{Id: vn.Id}
-		if store := nls.GetStore(vn.Id); store != nil {
+		store, err := nls.GetStore(vn.Id)
+		if err == nil {
 			r.Data, r.Err = store.GetBlock(key)
 		} else {
-			r.Err = fmt.Errorf("target vn not found: %x", vn.Id)
+			r.Err = err
 		}
 		resp[i] = r
 	}
@@ -263,10 +290,11 @@ func (nls localStore) DeleteBlock(blk []byte, opts *RequestOptions, ids ...*chor
 
 	for i, vn := range ids {
 		r := &VnodeResponse{Id: vn.Id, Data: []byte{}}
-		if store := nls.GetStore(vn.Id); store != nil {
+		store, err := nls.GetStore(vn.Id)
+		if err == nil {
 			r.Err = store.DeleteBlock(blk)
 		} else {
-			r.Err = fmt.Errorf("target vn not found: %x", vn.Id)
+			r.Err = err
 		}
 		resp[i] = r
 	}
@@ -281,10 +309,11 @@ func (nls localStore) SetBlock(blk []byte, opts *RequestOptions, ids ...*chord.V
 
 	for i, vn := range ids {
 		r := &VnodeResponse{Id: vn.Id}
-		if store := nls.GetStore(vn.Id); store != nil {
+		store, err := nls.GetStore(vn.Id)
+		if err == nil {
 			r.Data, r.Err = store.SetBlock(blk)
 		} else {
-			r.Err = fmt.Errorf("target vn not found: %x", vn.Id)
+			r.Err = err
 		}
 		resp[i] = r
 	}

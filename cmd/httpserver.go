@@ -42,13 +42,20 @@ func (hs *httpServer) handleData(w http.ResponseWriter, r *http.Request) (interf
 			r.Body.Close()
 
 			ct.start()
-			err = hs.tt.Set(key, b)
+
+			_, err = hs.tt.Set(key, b)
+
 			rtms := ct.stop()
 			w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", rtms))
 		}
 
 	case "DELETE":
-		err = hs.tt.Delete(key)
+		ct.start()
+
+		_, err = hs.tt.Delete(key)
+
+		rtms := ct.stop()
+		w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", rtms))
 
 	default:
 		err = fmt.Errorf("Method not allowed")

@@ -34,6 +34,7 @@ func NewMemTxStore() *MemTxStore {
 // with the key and slice of transactions
 func (mts *MemTxStore) Iter(f func(k []byte, txs TxSlice) error) error {
 	var err error
+
 	for k, v := range mts.m {
 		if e := f([]byte(k), v); e != nil {
 			err = e

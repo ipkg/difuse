@@ -10,8 +10,8 @@ const (
 )
 
 var (
-	// ErrNotFound not found err
-	ErrNotFound      = fmt.Errorf("not found")
+	errKeyNotFound   = fmt.Errorf("key not found")
+	errBlockNotFound = fmt.Errorf("block not found")
 	errAlreadyExists = fmt.Errorf("already exists")
 	errInvalidTxType = fmt.Errorf("invalid tx type")
 )

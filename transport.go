@@ -3,6 +3,7 @@ package difuse
 import (
 	"sync"
 
+	"github.com/ipkg/difuse/store"
 	"github.com/ipkg/difuse/txlog"
 	chord "github.com/ipkg/go-chord"
 )
@@ -23,11 +24,11 @@ type localTransport struct {
 
 	remote Transport
 
-	elector LeaderElector
+	cs ConsistentStore
 }
 
-func newLocalTransport(remote Transport, elector LeaderElector) *localTransport {
-	return &localTransport{remote: remote, local: make(localStore), elector: elector}
+func newLocalTransport(remote Transport, cs ConsistentStore) *localTransport {
+	return &localTransport{remote: remote, local: make(localStore), cs: cs}
 }
 
 func (lt *localTransport) Stat(key []byte, options *RequestOptions, vl ...*chord.Vnode) ([]*VnodeResponse, error) {
@@ -35,6 +36,20 @@ func (lt *localTransport) Stat(key []byte, options *RequestOptions, vl ...*chord
 		return lt.local.Stat(key, options, vl...)
 	}
 	return lt.remote.Stat(key, options, vl...)
+}
+
+func (lt *localTransport) SetInode(host string, inode *store.Inode, options *RequestOptions) (*chord.Vnode, error) {
+	if lt.host == host {
+		return lt.cs.SetInode(inode, options)
+	}
+	return lt.remote.SetInode(host, inode, options)
+}
+
+func (lt *localTransport) DeleteInode(host string, inode *store.Inode, options *RequestOptions) (*chord.Vnode, error) {
+	if lt.host == host {
+		return lt.cs.DeleteInode(inode, options)
+	}
+	return lt.remote.DeleteInode(host, inode, options)
 }
 
 func (lt *localTransport) SetBlock(data []byte, options *RequestOptions, vl ...*chord.Vnode) ([]*VnodeResponse, error) {
@@ -68,6 +83,7 @@ func (lt *localTransport) AppendTx(tx *txlog.Tx, options *RequestOptions, vl ...
 	}
 	return lt.remote.AppendTx(tx, options, vl...)
 }
+
 func (lt *localTransport) GetTx(key, txhash []byte, options *RequestOptions, vl ...*chord.Vnode) ([]*VnodeResponse, error) {
 	if vl[0].Host == lt.host {
 		return lt.local.GetTx(key, txhash, options, vl...)
@@ -80,6 +96,13 @@ func (lt *localTransport) LastTx(key []byte, options *RequestOptions, vl ...*cho
 		return lt.local.LastTx(key, options, vl...)
 	}
 	return lt.remote.LastTx(key, options, vl...)
+}
+
+func (lt *localTransport) MerkleRootTx(key []byte, options *RequestOptions, vl ...*chord.Vnode) ([]*VnodeResponse, error) {
+	if vl[0].Host == lt.host {
+		return lt.local.MerkleRootTx(key, options, vl...)
+	}
+	return lt.remote.MerkleRootTx(key, options, vl...)
 }
 
 func (lt *localTransport) NewTx(key []byte, vl ...*chord.Vnode) ([]*VnodeResponse, error) {
@@ -100,22 +123,22 @@ func (lt *localTransport) ReplicateTx(src, dst *chord.Vnode) error {
 //Delete(peer string, key []byte, options ...RequestOptions) error
 func (lt *localTransport) LookupLeader(host string, key []byte) (*chord.Vnode, []*chord.Vnode, map[string][]*chord.Vnode, error) {
 	if lt.host == host {
-		return lt.elector.LookupLeader(key)
+		return lt.cs.LookupLeader(key)
 	}
 	return lt.remote.LookupLeader(host, key)
 }
 
-// Register registers a datastore for a vnode.
-func (lt *localTransport) Register(vn *chord.Vnode, vs VnodeStore) {
+// RegisterVnode registers a datastore for a vnode.
+func (lt *localTransport) RegisterVnode(vn *chord.Vnode, vs VnodeStore) {
 	lt.lock.Lock()
 	lt.host = vn.Host
 	lt.local[vn.String()] = vs
 	lt.lock.Unlock()
 
-	lt.remote.Register(vn, vs)
+	lt.remote.RegisterVnode(vn, vs)
 }
 
-func (lt *localTransport) RegisterElector(elector LeaderElector) {
-	lt.elector = elector
-	lt.remote.RegisterElector(elector)
+func (lt *localTransport) Register(cs ConsistentStore) {
+	lt.cs = cs
+	lt.remote.Register(cs)
 }

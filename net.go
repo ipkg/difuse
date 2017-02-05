@@ -31,8 +31,8 @@ type NetTransport struct {
 
 	clock sync.Mutex
 	out   map[string]*outConn
-	// elector is the interface providing leader election
-	elector LeaderElector
+	// consistent storage interface
+	cs ConsistentStore
 }
 
 func NewNetTransport() *NetTransport {
@@ -76,6 +76,48 @@ func (t *NetTransport) reapConn(conn *outConn) {
 		delete(t.out, conn.host)
 	}
 	t.clock.Unlock()
+}
+
+// SetInode sets the given inode returning the leader for the inode and error
+func (t *NetTransport) SetInode(host string, inode *store.Inode, options *RequestOptions) (*chord.Vnode, error) {
+	out, err := t.getConn(host)
+	if err != nil {
+		return nil, err
+	}
+
+	fb := flatbuffers.NewBuilder(0)
+	ofs := inode.Serialize(fb)
+	fb.Finish(ofs)
+	payload := &chord.Payload{Data: fb.Bytes[fb.Head():]}
+
+	resp, err := out.client.SetInodeServe(context.Background(), payload)
+	if err != nil {
+		t.reapConn(out)
+		return nil, err
+	}
+
+	return chord.DeserializeVnodeErr(resp.Data)
+}
+
+// DeleteInode deletes the given inode returning the leader for the inode and error
+func (t *NetTransport) DeleteInode(host string, inode *store.Inode, options *RequestOptions) (*chord.Vnode, error) {
+	out, err := t.getConn(host)
+	if err != nil {
+		return nil, err
+	}
+
+	fb := flatbuffers.NewBuilder(0)
+	ofs := inode.Serialize(fb)
+	fb.Finish(ofs)
+	payload := &chord.Payload{Data: fb.Bytes[fb.Head():]}
+
+	resp, err := out.client.DeleteInodeServe(context.Background(), payload)
+	if err != nil {
+		t.reapConn(out)
+		return nil, err
+	}
+
+	return chord.DeserializeVnodeErr(resp.Data)
 }
 
 // Stat makes a stat request to the provided vnodes.  All vnodes per request should be long to the same host.
@@ -149,6 +191,25 @@ func (t *NetTransport) DeleteBlock(key []byte, options *RequestOptions, vs ...*c
 	payload := &chord.Payload{Data: data}
 
 	resp, err := out.client.DeleteBlockServe(context.Background(), payload)
+	if err != nil {
+		t.reapConn(out)
+		return nil, err
+	}
+
+	return deserializeVnodeIdBytesErrList(resp.Data), nil
+}
+
+func (t *NetTransport) MerkleRootTx(key []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error) {
+
+	out, err := t.getConn(vs[0].Host)
+	if err != nil {
+		return nil, err
+	}
+
+	data := serializeVnodeIdsBytes(key, vs)
+	payload := &chord.Payload{Data: data}
+
+	resp, err := out.client.MerkleRootTxServe(context.Background(), payload)
 	if err != nil {
 		t.reapConn(out)
 		return nil, err
@@ -250,9 +311,9 @@ func (t *NetTransport) LookupLeader(host string, key []byte) (*chord.Vnode, []*c
 // ReplicateTx replicates the last tx for each key from the local vnode to the remote vnode.
 func (t *NetTransport) ReplicateTx(local, remote *chord.Vnode) error {
 	// Get local store
-	st := t.local.GetStore(local.Id)
-	if st == nil {
-		return store.ErrNotFound
+	st, err := t.local.GetStore(local.Id)
+	if err != nil {
+		return err
 	}
 	// Get remote conn
 	out, err := t.getConn(remote.Host)
@@ -281,6 +342,7 @@ func (t *NetTransport) ReplicateTx(local, remote *chord.Vnode) error {
 	// TODO:
 	// recieve merkle
 
+	var cnt int
 	err = st.IterTx(func(k []byte, txs txlog.TxSlice) error {
 		// TODO:
 		// calcuate diff based on merkle and send delta
@@ -297,12 +359,15 @@ func (t *NetTransport) ReplicateTx(local, remote *chord.Vnode) error {
 			}
 		}
 
+		cnt++
 		return nil
 	})
 
 	if err != nil {
 		return err
 	}
+
+	log.Printf("action=replicated count=%d src=%s dst=%s", cnt, shortID(local), shortID(remote))
 
 	_, err = stream.CloseAndRecv()
 	return err
@@ -311,9 +376,9 @@ func (t *NetTransport) ReplicateTx(local, remote *chord.Vnode) error {
 // ReplicateBlocks starts cloning blocks from local vnode to remote vnode.
 func (t *NetTransport) ReplicateBlocks(local, remote *chord.Vnode) error {
 	// Get local store
-	st := t.local.GetStore(local.Id)
-	if st == nil {
-		return store.ErrNotFound
+	st, err := t.local.GetStore(local.Id)
+	if err != nil {
+		return err
 	}
 	// Get remote conn
 	out, err := t.getConn(remote.Host)
@@ -356,12 +421,17 @@ func (t *NetTransport) ReplicateBlocks(local, remote *chord.Vnode) error {
 	return err
 }
 
-// Register registers a store to a vnode.
-func (t *NetTransport) Register(vn *chord.Vnode, store VnodeStore) {
+// RegisterVnode registers a store to a vnode.
+func (t *NetTransport) RegisterVnode(vn *chord.Vnode, store VnodeStore) {
 	key := vn.String()
 	t.lock.Lock()
 	t.local[key] = store
 	t.lock.Unlock()
+}
+
+// Register registers a consistent store to the transport
+func (t *NetTransport) Register(cs ConsistentStore) {
+	t.cs = cs
 }
 
 // GetTxServe serves a GetTx request
@@ -382,6 +452,15 @@ func (t *NetTransport) LastTxServe(ctx context.Context, in *chord.Payload) (*cho
 	return &chord.Payload{Data: data}, nil
 }
 
+// MerkleRootTxServe serves a MerkleRootTx requeset
+func (t *NetTransport) MerkleRootTxServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
+	vs, key := deserializeVnodeIdsBytes(in.Data)
+	rsps, _ := t.local.MerkleRootTx(key, nil, vs...)
+
+	data := serializeVnodeIdBytesErrList(rsps)
+	return &chord.Payload{Data: data}, nil
+}
+
 // AppendTxServe serves an AppendTx request
 func (t *NetTransport) AppendTxServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
 	vns, tx := deserializeVnodeIdsTx(in.Data)
@@ -397,6 +476,29 @@ func (t *NetTransport) StatServe(ctx context.Context, in *chord.Payload) (*chord
 	rsp, _ := t.local.Stat(k, nil, vns...)
 
 	data := serializeVnodeIdInodeErrList(rsp)
+	return &chord.Payload{Data: data}, nil
+}
+
+// SetInodeServe serves a SetInode request.
+func (t *NetTransport) SetInodeServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
+	inode := &store.Inode{}
+	inode.Deserialize(in.Data)
+
+	// TODO: parse opts
+	vn, err := t.cs.SetInode(inode, nil)
+
+	data := chord.SerializeVnodeErr(vn, err)
+	return &chord.Payload{Data: data}, nil
+}
+
+func (t *NetTransport) DeleteInodeServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
+	inode := &store.Inode{}
+	inode.Deserialize(in.Data)
+
+	// TODO: parse opts
+	vn, err := t.cs.DeleteInode(inode, nil)
+
+	data := chord.SerializeVnodeErr(vn, err)
 	return &chord.Payload{Data: data}, nil
 }
 
@@ -427,7 +529,7 @@ func (t *NetTransport) DeleteBlockServe(ctx context.Context, in *chord.Payload) 
 
 func (t *NetTransport) LookupLeaderServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
 	fbkey := fbtypes.GetRootAsByteSlice(in.Data, 0)
-	l, vl, _, err := t.elector.LookupLeader(fbkey.BBytes())
+	l, vl, _, err := t.cs.LookupLeader(fbkey.BBytes())
 	list := append([]*chord.Vnode{l}, vl...)
 	data := chord.SerializeVnodeListErr(list, err)
 
@@ -448,9 +550,9 @@ func (t *NetTransport) ReplicateBlocksServe(stream netrpc.DifuseRPC_ReplicateBlo
 	// Deserialize vnode id
 	bs := fbtypes.GetRootAsByteSlice(req.Data, 0)
 	// Get vnode store
-	st := t.local.GetStore(bs.BBytes())
-	if st == nil {
-		return store.ErrNotFound
+	st, err := t.local.GetStore(bs.BBytes())
+	if err != nil {
+		return err
 	}
 	// Receive blocks
 	for {
@@ -487,9 +589,9 @@ func (t *NetTransport) ReplicateTxServe(stream netrpc.DifuseRPC_ReplicateTxServe
 	// Deserialize vnode id
 	bs := fbtypes.GetRootAsByteSlice(req.Data, 0)
 	// Get vnode store
-	st := t.local.GetStore(bs.BBytes())
-	if st == nil {
-		return store.ErrNotFound
+	st, err := t.local.GetStore(bs.BBytes())
+	if err != nil {
+		return err
 	}
 
 	// TODO:
@@ -519,8 +621,4 @@ func (t *NetTransport) ReplicateTxServe(stream netrpc.DifuseRPC_ReplicateTxServe
 	}
 
 	return stream.SendAndClose(&chord.Payload{})
-}
-
-func (t *NetTransport) RegisterElector(elector LeaderElector) {
-	t.elector = elector
 }

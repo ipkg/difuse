@@ -8,6 +8,7 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 
 	"github.com/ipkg/difuse/fbtypes"
+	"github.com/ipkg/difuse/txlog"
 )
 
 // Inode represents a single unit of data around the ring.
@@ -21,23 +22,35 @@ type Inode struct {
 	// This holds the address to physical data.  The address can be of any type
 	// i.e. hash, key, url etc..
 	Blocks [][]byte
+
+	// merkle root of transactions made against this inode
+	txroot []byte
 }
 
+// NewInode instantiates a new inode with the given id.  This is an empty inode with
+// no data.
 func NewInode(id []byte) *Inode {
 	return &Inode{
 		Id:     id,
 		Blocks: make([][]byte, 0),
+		txroot: txlog.ZeroHash(),
 	}
 }
 
 // NewInodeFromData instantiates a new inode setting the hash from the provided data
 // to blocks
 func NewInodeFromData(key, data []byte) *Inode {
-	rk := &Inode{Id: key}
+	rk := NewInode(key)
 	rk.Size = int64(len(data))
+
 	sh := fastsha256.Sum256(data)
 	rk.Blocks = [][]byte{sh[:]}
 	return rk
+}
+
+// TxRoot returns the merkle root of all transactions performed on this vnode.
+func (r *Inode) TxRoot() []byte {
+	return r.txroot
 }
 
 // MarshalJSON is for user legibility
@@ -46,7 +59,9 @@ func (r *Inode) MarshalJSON() ([]byte, error) {
 		"size":   r.Size,
 		"key":    string(r.Id),
 		"inline": r.Inline,
+		"txroot": fmt.Sprintf("%x", r.txroot),
 	}
+
 	bhs := make([]string, len(r.Blocks))
 	for i, v := range r.Blocks {
 		bhs[i] = fmt.Sprintf("%x", v)
@@ -63,6 +78,7 @@ func (r *Inode) Deserialize(buf []byte) {
 	r.Id = fbk.IdBytes()
 	r.Size = fbk.Size()
 	r.Inline = (fbk.Inline() == byte(1))
+	r.txroot = fbk.RootBytes()
 
 	l := fbk.BlocksLength()
 	r.Blocks = make([][]byte, l)
@@ -91,11 +107,13 @@ func (r *Inode) Serialize(fb *flatbuffers.Builder) flatbuffers.UOffsetT {
 	}
 	bh := fb.EndVector(len(r.Blocks))
 	kp := fb.CreateByteString(r.Id)
+	rp := fb.CreateByteString(r.txroot)
 
 	fbtypes.InodeStart(fb)
 	fbtypes.InodeAddId(fb, kp)
 	fbtypes.InodeAddBlocks(fb, bh)
 	fbtypes.InodeAddSize(fb, r.Size)
+	fbtypes.InodeAddRoot(fb, rp)
 	if r.Inline {
 		fbtypes.InodeAddInline(fb, byte(1))
 	}

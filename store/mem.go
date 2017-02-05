@@ -39,7 +39,60 @@ func NewMemLoggedStore(vn *chord.Vnode, kp txlog.Signator) *MemLoggedStore {
 	return mls
 }
 
-func (mem *MemLoggedStore) MerkleRoot(key []byte) ([]byte, error) {
+// Apply a given transaction to the stable store
+func (mem *MemLoggedStore) Apply(ktx *txlog.Tx) error {
+	txType := ktx.Data[0]
+
+	log.Printf("Apply key='%s' vn=%s/%x type=%x size=%d", ktx.Key, mem.vn.Host, mem.vn.Id[:7], txType, len(ktx.Data[1:]))
+
+	switch txType {
+	case TxTypeSet:
+		return mem.applySetKey(ktx.Key, ktx.Data[1:])
+
+	case TxTypeDelete:
+		return mem.applyDeleteKey(ktx.Key)
+
+	default:
+		return errInvalidTxType
+	}
+}
+
+// setKey sets transaction based data
+func (mem *MemLoggedStore) applySetKey(key, value []byte) error {
+	rk := &Inode{}
+	rk.Deserialize(value)
+
+	mr, err := mem.txstore.MerkleRoot(key)
+	if err != nil {
+		return err
+	}
+
+	rk.txroot = mr
+
+	mem.tlock.Lock()
+	mem.txm[string(key)] = rk
+	mem.tlock.Unlock()
+
+	return nil
+}
+
+// delete a key only leaving the underlying blocks intact.
+func (mem *MemDataStore) applyDeleteKey(key []byte) error {
+	k := string(key)
+
+	_, ok := mem.txm[k]
+	if !ok {
+		return errKeyNotFound
+	}
+
+	mem.tlock.Lock()
+	delete(mem.txm, k)
+	mem.tlock.Unlock()
+	return nil
+}
+
+// MerkleRootTx returns the merkle root of all transactions for a given key
+func (mem *MemLoggedStore) MerkleRootTx(key []byte) ([]byte, error) {
 	return mem.txstore.MerkleRoot(key)
 }
 
@@ -48,6 +101,7 @@ func (mem *MemLoggedStore) GetTx(key, txhash []byte) (*txlog.Tx, error) {
 	return mem.txstore.Get(key, txhash)
 }
 
+// IterTx iterates over all transactions in the store.
 func (mem *MemLoggedStore) IterTx(f func([]byte, txlog.TxSlice) error) error {
 	return mem.txstore.Iter(f)
 }
@@ -62,6 +116,7 @@ func (mem *MemLoggedStore) NewTx(key []byte) (*txlog.Tx, error) {
 	return mem.txl.NewTx(key)
 }
 
+// LastTx returns the last transaction in the log.
 func (mem *MemLoggedStore) LastTx(key []byte) (*txlog.Tx, error) {
 	return mem.txl.LastTx(key)
 }
@@ -107,7 +162,7 @@ func (ms *MemDataStore) Stat(key []byte) (*Inode, error) {
 		return rk, nil
 	}
 
-	return nil, ErrNotFound
+	return nil, errKeyNotFound
 }
 
 func (ms *MemDataStore) IterBlocks(f func(k, v []byte) error) error {
@@ -133,7 +188,7 @@ func (ms *MemDataStore) GetBlock(key []byte) ([]byte, error) {
 	if v, ok := ms.cad[k]; ok {
 		return v, nil
 	}
-	return nil, ErrNotFound
+	return nil, errBlockNotFound
 }
 
 // SetBlock sets the given value and returns the key hash.  This is used to directly
@@ -165,52 +220,7 @@ func (ms *MemDataStore) DeleteBlock(key []byte) error {
 		delete(ms.cad, k)
 		return nil
 	}
-	return ErrNotFound
-}
-
-// Apply a given transaction to the stable store
-func (ms *MemDataStore) Apply(ktx *txlog.Tx) error {
-	txType := ktx.Data[0]
-
-	log.Printf("Apply key='%s' vn=%s/%x type=%x size=%d", ktx.Key, ms.vn.Host, ms.vn.Id[:7], txType, len(ktx.Data[1:]))
-
-	switch txType {
-	case TxTypeSet:
-		return ms.applySetKey(ktx.Key, ktx.Data[1:])
-
-	case TxTypeDelete:
-		return ms.applyDeleteKey(ktx.Key)
-
-	default:
-		return errInvalidTxType
-	}
-}
-
-// setKey sets transaction based data
-func (ms *MemDataStore) applySetKey(key, value []byte) error {
-	rk := &Inode{}
-	rk.Deserialize(value)
-
-	ms.tlock.Lock()
-	ms.txm[string(key)] = rk
-	ms.tlock.Unlock()
-
-	return nil
-}
-
-// delete a key only leaving the underlying blocks intact.
-func (ms *MemDataStore) applyDeleteKey(key []byte) error {
-	k := string(key)
-
-	_, ok := ms.txm[k]
-	if !ok {
-		return ErrNotFound
-	}
-
-	ms.tlock.Lock()
-	delete(ms.txm, k)
-	ms.tlock.Unlock()
-	return nil
+	return errBlockNotFound
 }
 
 func (ms *MemDataStore) Restore(r io.Reader) error {
