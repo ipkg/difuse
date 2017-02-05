@@ -4,8 +4,7 @@ go:
   - 1.7.3
 
 install:
-  - make prep deps
+  - make deps
 
 script:
-  - make test
-  - make dist
+  - make test dist

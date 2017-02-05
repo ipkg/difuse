@@ -12,15 +12,14 @@ BUILD_CMD = CGO_ENABLED=0 go build -a -tags netgo -installsuffix netgo ${LD_OPTS
 
 clean:
 	rm -f ${NAME}
+	rm -f ${NAME}-darwin
+	rm -f ${NAME}-linux
+	rm -f ${NAME}-win
 	go clean -i ./...
 	rm -rf vendor/
 
-prep:
-	[ -d "${GOPATH}/bin" ] || mkdir -p "${GOPATH}/bin"
-	curl https://glide.sh/get | sh
-
 deps:
-	glide install
+	go get -d -v ./...; cd ../../euforia/go-chord && git checkout grpc-transport-flatbuffers
 
 fbs:
 	rm -rf fbtypes/*.go
