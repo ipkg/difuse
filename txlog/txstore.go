@@ -79,9 +79,13 @@ func (mts *MemTxStore) Length(key []byte) int {
 
 // MerkleRoot returns the merkle root of the transaction log for a given key.
 func (mts *MemTxStore) MerkleRoot(key []byte) ([]byte, error) {
+	mts.mu.RLock()
+	defer mts.mu.RUnlock()
+
 	if v, ok := mts.m[string(key)]; ok {
 		return v.MerkleRoot()
 	}
+
 	return nil, errNotFound
 }
 

@@ -128,18 +128,21 @@ func (s *Difuse) appendTx(txtype byte, key, data []byte, opts *RequestOptions) (
 		delete(vm, l.Host)
 
 		go func(vmap map[string][]*chord.Vnode, ktx *txlog.Tx, options RequestOptions) {
+
 			for _, vns := range vmap {
 				resp, err := s.transport.AppendTx(ktx, &options, vns...)
 				if err != nil {
-					log.Printf("ERR key=%s msg='%v'", ktx.Key, err)
+					log.Printf("action=appendtx status=failed key=%s msg='%v'", ktx.Key, err)
 					continue
 				}
+
 				for _, rsp := range resp {
 					if rsp.Err != nil {
-						log.Printf("ERR key=%s vn=%x msg='%v'", ktx.Key, rsp.Id[:8], resp[0].Err)
+						log.Printf("action=appendtx status=failed key=%s vn=%x msg='%v'", ktx.Key, rsp.Id[:8], rsp.Err)
 					}
 				}
 			}
+
 		}(vm, tx, *opts)
 
 		return l, nil

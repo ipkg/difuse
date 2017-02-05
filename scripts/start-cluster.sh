@@ -19,19 +19,22 @@ fi
 bstart=4624
 astart=9090
 
-sltime=1
+#sltime=1
 #PIDS=()
 
 ./${NAME} -debug &
+sleep 2;
 
 for i in `seq 1 ${COUNT}`; do
-    slt=`expr ${sltime} \+ ${i}`
-    sleep ${slt};
+    #slt=`expr ${sltime} \+ ${i}`
+    #sleep ${slt};
 
     b=`expr ${bstart} \+ ${i}`
     a=`expr ${astart} \+ ${i}`
 
     ./${NAME} -b 127.0.0.1:$b -a 127.0.0.1:$a -j 127.0.0.1:$bstart -debug &
+
+    sleep 1;
 done
 
 #echo "PIDS: ${PIDS[@]}"

@@ -43,7 +43,7 @@ func NewMemLoggedStore(vn *chord.Vnode, kp txlog.Signator) *MemLoggedStore {
 func (mem *MemLoggedStore) Apply(ktx *txlog.Tx) error {
 	txType := ktx.Data[0]
 
-	log.Printf("Apply key='%s' vn=%s/%x type=%x size=%d", ktx.Key, mem.vn.Host, mem.vn.Id[:7], txType, len(ktx.Data[1:]))
+	//log.Printf("Apply key='%s' vn=%s/%x type=%x size=%d", ktx.Key, mem.vn.Host, mem.vn.Id[:7], txType, len(ktx.Data[1:]))
 
 	switch txType {
 	case TxTypeSet:
@@ -62,6 +62,8 @@ func (mem *MemLoggedStore) applySetKey(key, value []byte) error {
 	rk := &Inode{}
 	rk.Deserialize(value)
 
+	// Set the merkle root of all tx's for this key. This is based on the local
+	// store and should line up on every node if consistency is met.
 	mr, err := mem.txstore.MerkleRoot(key)
 	if err != nil {
 		return err
