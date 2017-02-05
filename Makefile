@@ -16,6 +16,7 @@ clean:
 	rm -rf vendor/
 
 prep:
+	[ -d "$GOPATH/bin" ] || mkdir -pf "$GOPATH/bin"
 	curl https://glide.sh/get | sh
 
 deps:
