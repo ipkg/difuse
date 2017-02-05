@@ -6,11 +6,12 @@ import (
 	"log"
 	"sync"
 
+	flatbuffers "github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	chord "github.com/euforia/go-chord"
-	flatbuffers "github.com/google/flatbuffers/go"
+	chord "github.com/ipkg/go-chord"
+
 	"github.com/ipkg/difuse/fbtypes"
 	"github.com/ipkg/difuse/netrpc"
 	"github.com/ipkg/difuse/store"

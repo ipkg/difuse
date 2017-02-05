@@ -1,0 +1,19 @@
+package: github.com/ipkg/difuse
+import:
+- package: github.com/btcsuite/fastsha256
+- package: github.com/golang/protobuf
+  subpackages:
+  - proto
+- package: github.com/google/flatbuffers
+  version: ~1.5.0
+  subpackages:
+  - go
+- package: github.com/ipkg/go-chord
+  version: ~0.2.0
+- package: github.com/tv42/base58
+- package: github.com/xsleonard/go-merkle
+- package: golang.org/x/net
+  subpackages:
+  - context
+- package: google.golang.org/grpc
+  version: ~1.0.5

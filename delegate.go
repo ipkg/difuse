@@ -3,8 +3,8 @@ package difuse
 import (
 	"log"
 
-	chord "github.com/euforia/go-chord"
 	"github.com/ipkg/difuse/store"
+	chord "github.com/ipkg/go-chord"
 )
 
 // Init initializes a log backed datastore for the given vnode

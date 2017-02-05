@@ -3,8 +3,8 @@ package difuse
 import (
 	"fmt"
 
-	chord "github.com/euforia/go-chord"
 	"github.com/ipkg/difuse/txlog"
+	chord "github.com/ipkg/go-chord"
 )
 
 // localStore is a store containing all tx backed stores for the node.  It also

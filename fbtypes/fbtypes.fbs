@@ -1,4 +1,4 @@
-//include "euforia/go-chord/fbtypes.fbs";
+//include "ipkg/go-chord/fbtypes.fbs";
 namespace fbtypes;
 
 table RequestOptions {

@@ -6,8 +6,10 @@ import (
 	"log"
 
 	"github.com/btcsuite/fastsha256"
-	chord "github.com/euforia/go-chord"
 	flatbuffers "github.com/google/flatbuffers/go"
+
+	chord "github.com/ipkg/go-chord"
+
 	"github.com/ipkg/difuse/store"
 	"github.com/ipkg/difuse/txlog"
 )

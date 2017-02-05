@@ -7,8 +7,10 @@ import (
 	"testing"
 	"time"
 
-	chord "github.com/euforia/go-chord"
 	flatbuffers "github.com/google/flatbuffers/go"
+
+	chord "github.com/ipkg/go-chord"
+
 	"github.com/ipkg/difuse/txlog"
 )
 

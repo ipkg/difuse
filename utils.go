@@ -5,7 +5,7 @@ import (
 	"net"
 	"strings"
 
-	chord "github.com/euforia/go-chord"
+	chord "github.com/ipkg/go-chord"
 )
 
 func isZeroHash(b []byte) bool {

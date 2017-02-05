@@ -3,8 +3,8 @@ package difuse
 import (
 	"sync"
 
-	chord "github.com/euforia/go-chord"
 	"github.com/ipkg/difuse/txlog"
+	chord "github.com/ipkg/go-chord"
 )
 
 // VnodeResponse contains responses from multiple vnodes.

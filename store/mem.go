@@ -12,7 +12,9 @@ import (
 	"sync"
 
 	"github.com/btcsuite/fastsha256"
-	chord "github.com/euforia/go-chord"
+
+	chord "github.com/ipkg/go-chord"
+
 	"github.com/ipkg/difuse/txlog"
 )
 

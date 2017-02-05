@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
-	chord "github.com/euforia/go-chord"
 	flatbuffers "github.com/google/flatbuffers/go"
 	"google.golang.org/grpc"
+
+	chord "github.com/ipkg/go-chord"
 
 	"github.com/ipkg/difuse/netrpc"
 	"github.com/ipkg/difuse/store"

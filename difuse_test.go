@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	chord "github.com/euforia/go-chord"
 	"github.com/ipkg/difuse/store"
+	chord "github.com/ipkg/go-chord"
 )
 
 func prepDifuse(p int, j ...string) (*Difuse, error) {

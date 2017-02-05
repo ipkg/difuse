@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package netrpc;
 
-import "github.com/euforia/go-chord/net.proto";
+import "github.com/ipkg/go-chord/net.proto";
 
 service DifuseRPC {
     rpc GetTxServe(chord.Payload) returns (chord.Payload) {}

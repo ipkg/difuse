@@ -19,7 +19,7 @@ clean:
 	rm -rf vendor/
 
 deps:
-	go get -d -v ./...; cd ../../euforia/go-chord && git checkout grpc-transport-flatbuffers
+	go get -d -v ./...
 
 fbs:
 	rm -rf fbtypes/*.go

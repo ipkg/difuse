@@ -7,7 +7,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	chord "github.com/euforia/go-chord"
+	chord "github.com/ipkg/go-chord"
+
 	"github.com/ipkg/difuse"
 )
 

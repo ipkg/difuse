@@ -6,6 +6,7 @@ import (
 
 	"github.com/btcsuite/fastsha256"
 	flatbuffers "github.com/google/flatbuffers/go"
+
 	"github.com/ipkg/difuse/fbtypes"
 )
 
