@@ -227,13 +227,13 @@ func TestNetTransportTx(t *testing.T) {
 	<-time.After(1 * time.Second)
 
 	tc1 := 0
-	st1.IterTx(func(k []byte, txs txlog.TxSlice) error {
+	st1.IterTx(func(k []byte, txs *txlog.KeyTransactions) error {
 		tc1++
 		return nil
 	})
 
 	tc3 := 0
-	st3.IterTx(func(k []byte, txs txlog.TxSlice) error {
+	st3.IterTx(func(k []byte, txs *txlog.KeyTransactions) error {
 		tc3++
 		return nil
 	})

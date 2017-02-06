@@ -343,12 +343,12 @@ func (t *NetTransport) ReplicateTx(local, remote *chord.Vnode) error {
 	// recieve merkle
 
 	var cnt int
-	err = st.IterTx(func(k []byte, txs txlog.TxSlice) error {
+	err = st.IterTx(func(k []byte, kts *txlog.KeyTransactions) error {
 		// TODO:
 		// calcuate diff based on merkle and send delta
 
 		// Send transactions
-		for _, tx := range txs {
+		for _, tx := range kts.TxSlice {
 
 			fb.Reset()
 			fb.Finish(serializeTx(fb, tx))
@@ -482,7 +482,8 @@ func (t *NetTransport) StatServe(ctx context.Context, in *chord.Payload) (*chord
 // SetInodeServe serves a SetInode request.
 func (t *NetTransport) SetInodeServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
 	inode := &store.Inode{}
-	inode.Deserialize(in.Data)
+	ind := fbtypes.GetRootAsInode(in.Data, 0)
+	inode.Deserialize(ind)
 
 	// TODO: parse opts
 	vn, err := t.cs.SetInode(inode, nil)
@@ -491,9 +492,11 @@ func (t *NetTransport) SetInodeServe(ctx context.Context, in *chord.Payload) (*c
 	return &chord.Payload{Data: data}, nil
 }
 
+// DeleteInodeServe serves a DeleteInode request.
 func (t *NetTransport) DeleteInodeServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
 	inode := &store.Inode{}
-	inode.Deserialize(in.Data)
+	ind := fbtypes.GetRootAsInode(in.Data, 0)
+	inode.Deserialize(ind)
 
 	// TODO: parse opts
 	vn, err := t.cs.DeleteInode(inode, nil)

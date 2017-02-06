@@ -15,6 +15,7 @@ import (
 
 const (
 	headerResponseTime = "Response-Time"
+	headerVnode        = "Vnode"
 )
 
 type httpServer struct {
@@ -22,19 +23,21 @@ type httpServer struct {
 }
 
 func (hs *httpServer) handleData(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-	key := []byte(r.URL.Path[1:])
+
 	var (
-		data interface{}
-		err  error
-		ct   = newCallTimer()
+		key   = []byte(r.URL.Path[1:])
+		ct    = newCallTimer()
+		data  interface{}
+		meta  *difuse.ResponseMeta
+		err   error
+		rtime float64
 	)
 
 	switch r.Method {
 	case "GET":
 		ct.start()
-		data, err = hs.tt.Get(key)
-		rtms := ct.stop()
-		w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", rtms))
+		data, meta, err = hs.tt.Get(key)
+		rtime = ct.stop()
 
 	case "POST":
 		var b []byte
@@ -42,24 +45,22 @@ func (hs *httpServer) handleData(w http.ResponseWriter, r *http.Request) (interf
 			r.Body.Close()
 
 			ct.start()
-
-			_, err = hs.tt.Set(key, b)
-
-			rtms := ct.stop()
-			w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", rtms))
+			meta, err = hs.tt.Set(key, b)
+			rtime = ct.stop()
 		}
 
 	case "DELETE":
 		ct.start()
-
-		_, err = hs.tt.Delete(key)
-
-		rtms := ct.stop()
-		w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", rtms))
+		_, meta, err = hs.tt.Delete(key)
+		rtime = ct.stop()
 
 	default:
-		err = fmt.Errorf("Method not allowed")
+		return nil, fmt.Errorf("Method not allowed")
+
 	}
+
+	w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", rtime))
+	w.Header().Set(headerVnode, difuse.ShortVnodeID(meta.Vnode))
 
 	return data, err
 }
@@ -68,6 +69,7 @@ func (hs *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upath := r.URL.Path[1:]
 
 	var (
+		ct    = newCallTimer()
 		data  interface{}
 		err   error
 		etime float64
@@ -76,29 +78,28 @@ func (hs *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.HasPrefix(upath, "stat/"):
 		kstr := strings.TrimPrefix(upath, "stat/")
+		meta := &difuse.ResponseMeta{}
 
-		ct := newCallTimer()
 		ct.start()
-
-		data, err = hs.tt.Stat([]byte(kstr))
-
+		data, meta, err = hs.tt.Stat([]byte(kstr))
 		etime = ct.stop()
+
+		w.Header().Set(headerVnode, difuse.ShortVnodeID(meta.Vnode))
 		w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", etime))
 
 	case strings.HasPrefix(upath, "leader/"):
 		kstr := strings.TrimPrefix(upath, "leader/")
-
-		ct := newCallTimer()
-		ct.start()
 
 		var (
 			l  *chord.Vnode
 			vs []*chord.Vnode
 			vm map[string][]*chord.Vnode
 		)
-		l, vs, vm, err = hs.tt.LookupLeader([]byte(kstr))
 
+		ct.start()
+		l, vs, vm, err = hs.tt.LookupLeader([]byte(kstr))
 		etime = ct.stop()
+
 		w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", etime))
 
 		if err == nil {
@@ -119,6 +120,7 @@ func (hs *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// no error and no response
 	if data == nil {
 		return
 	}

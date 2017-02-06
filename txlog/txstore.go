@@ -5,34 +5,33 @@ import "sync"
 // TxStore persists transactions to data store.
 type TxStore interface {
 	Get(key []byte, txhash []byte) (*Tx, error)
-	GetAll(key []byte) ([]*Tx, error)
 	First(key []byte) (*Tx, error)
 	Last(key []byte) (*Tx, error)
-	Length(key []byte) int
+
 	// MerkleRoot of the transactions for the given key
 	MerkleRoot(key []byte) ([]byte, error)
 
 	Add(tx *Tx) error
 	// Iterate over each key - TxSlice pair
-	Iter(func([]byte, TxSlice) error) error
+	Iter(func([]byte, *KeyTransactions) error) error
 }
 
 // MemTxStore stores the transaction log
 type MemTxStore struct {
 	mu sync.RWMutex
-	m  map[string]TxSlice
+	m  map[string]*KeyTransactions
 }
 
 // NewMemTxStore initializes a new transaction store
 func NewMemTxStore() *MemTxStore {
 	return &MemTxStore{
-		m: map[string]TxSlice{},
+		m: map[string]*KeyTransactions{},
 	}
 }
 
 // Iter iterates over keys and associated transactions calling the specified function
 // with the key and slice of transactions
-func (mts *MemTxStore) Iter(f func(k []byte, txs TxSlice) error) error {
+func (mts *MemTxStore) Iter(f func(k []byte, kt *KeyTransactions) error) error {
 	var err error
 
 	for k, v := range mts.m {
@@ -42,17 +41,6 @@ func (mts *MemTxStore) Iter(f func(k []byte, txs TxSlice) error) error {
 	}
 
 	return err
-}
-
-// GetAll gets all transactions for a given key
-func (mts *MemTxStore) GetAll(key []byte) ([]*Tx, error) {
-	mts.mu.RLock()
-	defer mts.mu.RUnlock()
-
-	if v, ok := mts.m[string(key)]; ok {
-		return v, nil
-	}
-	return nil, errNotFound
 }
 
 // Last returns the last transaction for a key
@@ -69,21 +57,13 @@ func (mts *MemTxStore) Last(key []byte) (*Tx, error) {
 	return nil, errNotFound
 }
 
-// Length returns the number of transactions in the store for a given key.
-func (mts *MemTxStore) Length(key []byte) int {
-	if v, ok := mts.m[string(key)]; ok {
-		return len(v)
-	}
-	return -1
-}
-
 // MerkleRoot returns the merkle root of the transaction log for a given key.
 func (mts *MemTxStore) MerkleRoot(key []byte) ([]byte, error) {
 	mts.mu.RLock()
 	defer mts.mu.RUnlock()
 
 	if v, ok := mts.m[string(key)]; ok {
-		return v.MerkleRoot()
+		return v.Root(), nil
 	}
 
 	return nil, errNotFound
@@ -110,11 +90,13 @@ func (mts *MemTxStore) Add(tx *Tx) error {
 
 	txs, ok := mts.m[string(tx.Key)]
 	if !ok {
-		txs = TxSlice{}
+		txs = NewKeyTransactions()
 	}
 
-	//mts.ltx = tx
-	txs = append(txs, tx)
+	if err := txs.AddTx(tx); err != nil {
+		return err
+	}
+
 	mts.m[string(tx.Key)] = txs
 	return nil
 }
@@ -142,7 +124,7 @@ func (mts *MemTxStore) Get(key []byte, txhash []byte) (*Tx, error) {
 	if !ok {
 		return nil, errNotFound
 	}
-	for _, tx := range txs {
+	for _, tx := range txs.TxSlice {
 		if EqualBytes(tx.Hash(), txhash) {
 			return tx, nil
 		}

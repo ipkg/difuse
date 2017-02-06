@@ -11,6 +11,13 @@ and leave, keys are re-balanced based across the new set of nodes.  This is acco
 by using a Distributed Hash Table as the underlying transport.
 
 
+## Features
+
+- Each node of equal weight. No single leader.
+- Highly-Scalable
+- Highly fault tolerant
+- Data de-duplication
+
 ## Installation
 Download the binary from [here].
 
@@ -35,8 +42,11 @@ or [http://localhost:9091](http://localhost:9091)
 ## Roadmap
 
 - **v1.0**
-    - [ ] Multiple consistency levels.
 
+    - [ ] Persistent Storage
+    - [ ] Stability
+    - [ ] User defined consistency levels.
+    - [ ] Jepsen tests
 
 ## Design
 

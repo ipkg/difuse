@@ -15,6 +15,7 @@ import (
 
 	chord "github.com/ipkg/go-chord"
 
+	"github.com/ipkg/difuse/fbtypes"
 	"github.com/ipkg/difuse/txlog"
 )
 
@@ -60,7 +61,9 @@ func (mem *MemLoggedStore) Apply(ktx *txlog.Tx) error {
 // setKey sets transaction based data
 func (mem *MemLoggedStore) applySetKey(key, value []byte) error {
 	rk := &Inode{}
-	rk.Deserialize(value)
+
+	ind := fbtypes.GetRootAsInode(value, 0)
+	rk.Deserialize(ind)
 
 	// Set the merkle root of all tx's for this key. This is based on the local
 	// store and should line up on every node if consistency is met.
@@ -68,7 +71,6 @@ func (mem *MemLoggedStore) applySetKey(key, value []byte) error {
 	if err != nil {
 		return err
 	}
-
 	rk.txroot = mr
 
 	mem.tlock.Lock()
@@ -104,7 +106,7 @@ func (mem *MemLoggedStore) GetTx(key, txhash []byte) (*txlog.Tx, error) {
 }
 
 // IterTx iterates over all transactions in the store.
-func (mem *MemLoggedStore) IterTx(f func([]byte, txlog.TxSlice) error) error {
+func (mem *MemLoggedStore) IterTx(f func([]byte, *txlog.KeyTransactions) error) error {
 	return mem.txstore.Iter(f)
 }
 

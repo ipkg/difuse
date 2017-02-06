@@ -29,7 +29,7 @@ type VnodeStore interface {
 	GetTx(key []byte, txhash []byte) (*txlog.Tx, error)
 	NewTx(key []byte) (*txlog.Tx, error)
 	LastTx(key []byte) (*txlog.Tx, error)
-	IterTx(func([]byte, txlog.TxSlice) error) error
+	IterTx(func([]byte, *txlog.KeyTransactions) error) error
 	// MerkleRoot of all transactions for the given key
 	MerkleRootTx(key []byte) ([]byte, error)
 
@@ -124,10 +124,10 @@ func (s *Difuse) RegisterRing(ring *chord.Ring) {
 
 // Get retrieves a the given key.  It first gets the inode then retrieves the underlying
 // blocks
-func (s *Difuse) Get(key []byte, options ...RequestOptions) ([]byte, error) {
-	inode, err := s.Stat(key, options...)
+func (s *Difuse) Get(key []byte, options ...RequestOptions) ([]byte, *ResponseMeta, error) {
+	inode, meta, err := s.Stat(key, options...)
 	if err != nil {
-		return nil, err
+		return nil, meta, err
 	}
 
 	out := make([]byte, 0, inode.Size)
@@ -135,31 +135,35 @@ func (s *Difuse) Get(key []byte, options ...RequestOptions) ([]byte, error) {
 
 		bd, err := s.GetBlock(bh, options...)
 		if err != nil {
-			return nil, err
+			return nil, meta, err
 		}
 
 		out = append(out, bd...)
 	}
-	return out, nil
+	return out, meta, nil
 }
 
 // Delete deletes an inode associated to the given key based on provided options. Returns
 // the leader vnode and error
-func (s *Difuse) Delete(key []byte, options ...RequestOptions) (*chord.Vnode, error) {
-	inode, err := s.Stat(key, options...)
+func (s *Difuse) Delete(key []byte, options ...RequestOptions) (*store.Inode, *ResponseMeta, error) {
+	inode, _, err := s.Stat(key, options...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
+	rmeta := &ResponseMeta{}
 	if len(options) > 0 {
-		return s.DeleteInode(inode, &options[0])
+		rmeta.Vnode, err = s.DeleteInode(inode, &options[0])
+	} else {
+		rmeta.Vnode, err = s.DeleteInode(inode, nil)
 	}
-	return s.DeleteInode(inode, nil)
+
+	return inode, rmeta, err
 }
 
 // Set sets a key to the given value.  It first sets the underlying block data then
 // sets the inode.  Returns the leader vnode and error
-func (s *Difuse) Set(key, value []byte, options ...RequestOptions) (*chord.Vnode, error) {
+func (s *Difuse) Set(key, value []byte, options ...RequestOptions) (*ResponseMeta, error) {
 	hsh, err := s.SetBlock(value, options...)
 	if err != nil {
 		return nil, err
@@ -169,10 +173,14 @@ func (s *Difuse) Set(key, value []byte, options ...RequestOptions) (*chord.Vnode
 	inode.Size = int64(len(value))
 	inode.Blocks = [][]byte{hsh}
 
+	rmeta := &ResponseMeta{}
 	if len(options) > 0 {
-		return s.SetInode(inode, &options[0])
+		rmeta.Vnode, err = s.SetInode(inode, &options[0])
+	} else {
+		rmeta.Vnode, err = s.SetInode(inode, nil)
 	}
-	return s.SetInode(inode, nil)
+
+	return rmeta, err
 }
 
 // DeleteInode deletes the given inode.  It only deletes the inode and not the underlying data.
@@ -220,7 +228,7 @@ func (s *Difuse) SetInode(inode *store.Inode, options *RequestOptions) (*chord.V
 }
 
 // Stat returns the inode entry for the key. By default it uses the leader consistency
-func (s *Difuse) Stat(key []byte, options ...RequestOptions) (*store.Inode, error) {
+func (s *Difuse) Stat(key []byte, options ...RequestOptions) (*store.Inode, *ResponseMeta, error) {
 	var opts *RequestOptions
 	if len(options) > 0 {
 		opts = &options[0]
@@ -228,42 +236,50 @@ func (s *Difuse) Stat(key []byte, options ...RequestOptions) (*store.Inode, erro
 		opts = &RequestOptions{Consistency: ConsistencyLeader}
 	}
 
+	rmeta := &ResponseMeta{}
+
 	switch opts.Consistency {
 	case ConsistencyLeader:
 		l, _, _, err := s.LookupLeader(key)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
+		rmeta.Vnode = l
 
 		resp, err := s.transport.Stat(key, opts, l)
 		if err != nil {
-			return nil, err
+			return nil, rmeta, err
 		}
 
 		if resp[0].Err != nil {
-			return nil, resp[0].Err
+			return nil, rmeta, resp[0].Err
 		}
 
 		if ind, ok := resp[0].Data.(*store.Inode); ok {
-			return ind, nil
+			return ind, rmeta, nil
 		}
-		return nil, fmt.Errorf(errInvalidDataType, resp[0].Data)
+		return nil, rmeta, fmt.Errorf(errInvalidDataType, resp[0].Data)
 
 	case ConsistencyLazy:
 		ccfg := s.config.Chord
 
 		vl, err := s.ring.Lookup(ccfg.NumSuccessors, key)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		vnb := vnodesByHost(vl)
 		// Try local vnodes first
 		if vns, ok := vnb[ccfg.Hostname]; ok {
 			resp, er := s.transport.Stat(key, opts, vns...)
-			if er == nil && resp[0].Err == nil {
-				if ind, ok := resp[0].Data.(*store.Inode); ok {
-					return ind, nil
+			if er == nil {
+				for i, rsp := range resp {
+					if rsp.Err == nil {
+						if ind, ok := rsp.Data.(*store.Inode); ok {
+							rmeta.Vnode = vns[i]
+							return ind, rmeta, nil
+						}
+					}
 				}
 			}
 			// Remove local host as we've already visited it.
@@ -278,21 +294,24 @@ func (s *Difuse) Stat(key []byte, options ...RequestOptions) (*store.Inode, erro
 				continue
 			}
 
-			if resp[0].Err != nil {
-				err = resp[0].Err
-				continue
-			}
+			for i, rsp := range resp {
+				if rsp.Err != nil {
+					err = rsp.Err
+					continue
+				}
 
-			if ind, ok := resp[0].Data.(*store.Inode); ok {
-				return ind, nil
+				if ind, ok := rsp.Data.(*store.Inode); ok {
+					rmeta.Vnode = vns[i]
+					return ind, rmeta, nil
+				}
+				err = fmt.Errorf(errInvalidDataType, rsp.Data)
 			}
-			err = fmt.Errorf(errInvalidDataType, resp[0].Data)
 		}
 
-		return nil, err
+		return nil, rmeta, err
 	}
 
-	return nil, fmt.Errorf(errInvalidConsistencyLevel, opts.Consistency)
+	return nil, rmeta, fmt.Errorf(errInvalidConsistencyLevel, opts.Consistency)
 }
 
 // GetBlock gets a block based on the provided options

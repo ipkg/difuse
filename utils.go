@@ -123,3 +123,11 @@ func shortID(vn *chord.Vnode) string {
 	}
 	return "<nil>"
 }
+
+// ShortVnodeID returns the shortened vnode id
+func ShortVnodeID(vn *chord.Vnode) string {
+	if vn == nil {
+		return "<nil>/<nil>"
+	}
+	return fmt.Sprintf("%s/%x", vn.Host, vn.Id[:8])
+}

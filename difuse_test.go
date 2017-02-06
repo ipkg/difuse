@@ -84,11 +84,11 @@ func TestDifuseLookupLeader(t *testing.T) {
 		t.Errorf("leader mismatch %s!=%s", lvn1.String(), lvn2.String())
 	}
 
-	if _, err = s1.Stat([]byte("Key")); err == nil {
+	if _, _, err = s1.Stat([]byte("Key")); err == nil {
 		t.Fatal("should fail")
 	}
 
-	if _, err = s1.Stat([]byte("Key"), RequestOptions{Consistency: 99}); err == nil {
+	if _, _, err = s1.Stat([]byte("Key"), RequestOptions{Consistency: 99}); err == nil {
 		t.Fatal("should fail")
 	}
 
@@ -124,12 +124,12 @@ func TestDifuseSetStat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ind1, err := s1.Stat(testkey)
+	ind1, _, err := s1.Stat(testkey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ind2, err := s2.Stat(testkey)
+	ind2, _, err := s2.Stat(testkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestDifuseSetStat(t *testing.T) {
 		t.Fatal("block hash mismatch")
 	}
 
-	_, err = s1.Stat(testkey, RequestOptions{Consistency: ConsistencyLazy})
+	_, _, err = s1.Stat(testkey, RequestOptions{Consistency: ConsistencyLazy})
 	if err != nil {
 		t.Error(err)
 	}
@@ -155,7 +155,7 @@ func TestDifuseSetStat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	val, err := s1.Get(testkey)
+	val, _, err := s1.Get(testkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,13 +163,13 @@ func TestDifuseSetStat(t *testing.T) {
 		t.Fatal("value mismatch")
 	}
 
-	if _, err = s2.Delete(testkey); err != nil {
+	if _, _, err = s2.Delete(testkey); err != nil {
 		//t.Fatal("should fail")
 		t.Fatal(err)
 	}
 
 	//<-time.After(1 * time.Second)
-	if _, err = s1.Delete(testkey); err == nil {
+	if _, _, err = s1.Delete(testkey); err == nil {
 		t.Fatal("should fail")
 	}
 

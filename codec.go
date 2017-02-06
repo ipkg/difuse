@@ -349,26 +349,6 @@ func deserializeVnodeIdBytesErrList(data []byte) []*VnodeResponse {
 	return out
 }
 
-func deserializeInode(ind *fbtypes.Inode) *store.Inode {
-	inode := &store.Inode{
-		Id:     ind.IdBytes(),
-		Size:   ind.Size(),
-		Inline: (ind.Inline() == byte(1)),
-	}
-
-	l := ind.BlocksLength()
-	bh := make([][]byte, l)
-	for i := 0; i < l; i++ {
-		var obj fbtypes.ByteSlice
-		ind.Blocks(&obj, i)
-		// deserialize in reverse
-		bh[l-i-1] = obj.BBytes()
-	}
-	inode.Blocks = bh
-
-	return inode
-}
-
 func deserializeVnodeIdInodeErrList(data []byte) []*VnodeResponse {
 	viel := fbtypes.GetRootAsVnodeIdInodeErrList(data, 0)
 	l := viel.LLength()
@@ -383,7 +363,10 @@ func deserializeVnodeIdInodeErrList(data []byte) []*VnodeResponse {
 			vr.Err = fmt.Errorf("%s", e)
 		} else {
 			ind := obj.Inode(nil)
-			vr.Data = deserializeInode(ind)
+
+			inds := &store.Inode{}
+			inds.Deserialize(ind)
+			vr.Data = inds
 		}
 		// deserialize in reverse
 		vrl[l-i-1] = vr

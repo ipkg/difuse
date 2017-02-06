@@ -15,6 +15,13 @@ type VnodeResponse struct {
 	Err  error
 }
 
+// ResponseMeta contains response metadata
+type ResponseMeta struct {
+	// Vnode that executed/responded.  In the case of writes this will be the leader
+	// vnode. For reads it will be the node that performed the acual read
+	Vnode *chord.Vnode
+}
+
 // localTransport routes requests to local or remote based on the given vnodes.
 type localTransport struct {
 	host string

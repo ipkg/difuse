@@ -9,6 +9,33 @@ type Signator interface {
 	Verify(pubkey, signature, hash []byte) error
 }
 
+// KeyTransactions holds all transactions for a given key
+type KeyTransactions struct {
+	TxSlice
+	root []byte
+}
+
+// NewKeyTransactions instances a new KeyTransactions to manages tx's for a key
+func NewKeyTransactions() *KeyTransactions {
+	return &KeyTransactions{
+		TxSlice: TxSlice{},
+		root:    ZeroHash(),
+	}
+}
+
+// Root returns the merkle root of all tx's
+func (k *KeyTransactions) Root() []byte {
+	return k.root
+}
+
+// AddTx adds a transaction for the key and updates the merkle root
+func (k *KeyTransactions) AddTx(tx *Tx) (err error) {
+	k.TxSlice = append(k.TxSlice, tx)
+	k.root, err = k.TxSlice.MerkleRoot()
+
+	return
+}
+
 // TxHeader contains header info for a transaction.
 type TxHeader struct {
 	PrevHash    []byte

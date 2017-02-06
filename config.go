@@ -45,8 +45,8 @@ func DefaultConfig() *Config {
 
 	c.Chord.NumSuccessors = 7
 	c.Chord.NumVnodes = 8
-	//c.Chord.StabilizeMin = 10 * time.Second
-	//c.Chord.StabilizeMax = 30 * time.Second
+	c.Chord.StabilizeMin = 10 * time.Second
+	c.Chord.StabilizeMax = 20 * time.Second
 
 	return c
 }

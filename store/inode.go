@@ -71,23 +71,24 @@ func (r *Inode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
-// Deserialize deserializes the buffer into a Inode
-func (r *Inode) Deserialize(buf []byte) {
-	//var rk RingKey
-	fbk := fbtypes.GetRootAsInode(buf, 0)
-	r.Id = fbk.IdBytes()
-	r.Size = fbk.Size()
-	r.Inline = (fbk.Inline() == byte(1))
-	r.txroot = fbk.RootBytes()
+// Deserialize deserializes the flatbuffer object into a Inode
+func (r *Inode) Deserialize(ind *fbtypes.Inode) {
 
-	l := fbk.BlocksLength()
-	r.Blocks = make([][]byte, l)
+	r.Id = ind.IdBytes()
+	r.Size = ind.Size()
+	r.Inline = (ind.Inline() == byte(1))
+	r.txroot = ind.RootBytes()
 
+	l := ind.BlocksLength()
+	bh := make([][]byte, l)
 	for i := 0; i < l; i++ {
-		var hj fbtypes.ByteSlice
-		fbk.Blocks(&hj, i)
-		r.Blocks[i] = hj.BBytes()
+		var obj fbtypes.ByteSlice
+		ind.Blocks(&obj, i)
+		// deserialize flatbuffer in reverse order to get the actual order
+		bh[l-i-1] = obj.BBytes()
 	}
+
+	r.Blocks = bh
 }
 
 // Serialize serializes the struct into the flatbuffer returning the offset.
