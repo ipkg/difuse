@@ -31,12 +31,18 @@ func (hs *httpServer) handleData(w http.ResponseWriter, r *http.Request) (interf
 		meta  *difuse.ResponseMeta
 		err   error
 		rtime float64
+		opts  = parseOptions(r)
 	)
 
 	switch r.Method {
 	case "GET":
-		ct.start()
-		data, meta, err = hs.tt.Get(key)
+		if opts == nil {
+			ct.start()
+			data, meta, err = hs.tt.Get(key)
+		} else {
+			ct.start()
+			data, meta, err = hs.tt.Get(key, *opts)
+		}
 		rtime = ct.stop()
 
 	case "POST":
@@ -79,9 +85,14 @@ func (hs *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(upath, "stat/"):
 		kstr := strings.TrimPrefix(upath, "stat/")
 		meta := &difuse.ResponseMeta{}
-
-		ct.start()
-		data, meta, err = hs.tt.Stat([]byte(kstr))
+		opts := parseOptions(r)
+		if opts == nil {
+			ct.start()
+			data, meta, err = hs.tt.Stat([]byte(kstr))
+		} else {
+			ct.start()
+			data, meta, err = hs.tt.Stat([]byte(kstr), *opts)
+		}
 		etime = ct.stop()
 
 		w.Header().Set(headerVnode, difuse.ShortVnodeID(meta.Vnode))
@@ -93,11 +104,11 @@ func (hs *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var (
 			l  *chord.Vnode
 			vs []*chord.Vnode
-			vm map[string][]*chord.Vnode
+			//vm map[string][]*chord.Vnode
 		)
 
 		ct.start()
-		l, vs, vm, err = hs.tt.LookupLeader([]byte(kstr))
+		l, vs, _, err = hs.tt.LookupLeader([]byte(kstr))
 		etime = ct.stop()
 
 		w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", etime))
@@ -105,8 +116,8 @@ func (hs *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			data = map[string]interface{}{
 				"leader": l,
-				"order":  vs,
-				"hosts":  vm,
+				"vnodes": vs,
+				//"hosts":  vm,
 			}
 		}
 
@@ -137,6 +148,7 @@ func (hs *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(e.Error()))
 			return
 		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	}
 
 	w.Write(b)
