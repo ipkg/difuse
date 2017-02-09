@@ -23,11 +23,11 @@ astart=9090
 #PIDS=()
 
 ./${NAME} -debug &
-sleep 2;
+sleep 1;
 
 for i in `seq 1 ${COUNT}`; do
-    #slt=`expr ${sltime} \+ ${i}`
-    #sleep ${slt};
+    echo "Press any key to start the next node"
+    read cin
 
     b=`expr ${bstart} \+ ${i}`
     a=`expr ${astart} \+ ${i}`
@@ -38,5 +38,5 @@ for i in `seq 1 ${COUNT}`; do
 done
 
 #echo "PIDS: ${PIDS[@]}"
-trap "{ pkill ${NAME}; }" SIGINT SIGTERM
+trap "{ pkill -9 ${NAME}; }" SIGINT SIGTERM
 wait

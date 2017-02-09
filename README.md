@@ -10,12 +10,10 @@ equally. Each node is the leader for a portion of keys in the cluster.  As nodes
 and leave, keys are re-balanced based across the new set of nodes.  This is accomplished
 by using a Distributed Hash Table as the underlying transport.
 
-
 ## Features
 
-- Each node of equal weight. No single leader.
-- Highly-Scalable
-- Highly fault tolerant
+- Each node is of equal weight. No single leader and no one is special.
+- Highly-Scalable fault tolerant due to the peer-to-peer design
 - Data de-duplication
 
 ## Installation
@@ -49,6 +47,7 @@ or [http://localhost:9091](http://localhost:9091)
     - [ ] Jepsen tests
 
 ## Design
+To Be Added
 
 ### Writes
 Difuse has 2 types of writes:
