@@ -199,6 +199,7 @@ func (t *NetTransport) DeleteBlock(key []byte, options *RequestOptions, vs ...*c
 	return deserializeVnodeIdBytesErrList(resp.Data), nil
 }
 
+// MerkleRootTx requests the transaction merkle root for the key.
 func (t *NetTransport) MerkleRootTx(key []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error) {
 
 	out, err := t.getConn(vs[0].Host)
@@ -308,13 +309,24 @@ func (t *NetTransport) LookupLeader(host string, key []byte) (*chord.Vnode, []*c
 	return vl[0], vl[1:], vm, nil
 }
 
-// ReplicateTx replicates the last tx for each key from the local vnode to the remote vnode.
+// ReplicateTx replicates tx's for each key from the local to the remote vnode.
 func (t *NetTransport) ReplicateTx(local, remote *chord.Vnode) error {
 	// Get local store
 	st, err := t.local.GetStore(local.Id)
 	if err != nil {
 		return err
 	}
+
+	// Build vnode id and datastore merkle root to flatbuffer.
+	mroot, err := st.MerkleRootTx(nil)
+	if err != nil {
+		return err
+	}
+	// Return if we have no data
+	if isZeroHash(mroot) {
+		return nil
+	}
+
 	// Get remote conn
 	out, err := t.getConn(remote.Host)
 	if err != nil {
@@ -330,26 +342,23 @@ func (t *NetTransport) ReplicateTx(local, remote *chord.Vnode) error {
 	// Buffer is built here for efficiency
 	fb := flatbuffers.NewBuilder(0)
 
-	// Build vnode id flatbuffer.
-	fb.Finish(serializeByteSlice(fb, remote.Id))
+	fb.Finish(serializeIdRoot(fb, remote.Id, mroot))
 
-	// Send vnode id
+	// Send remote vnode id and local vnode merkle to remote
 	req := &chord.Payload{Data: fb.Bytes[fb.Head():]}
 	if err = stream.SendMsg(req); err != nil {
 		return err
 	}
 
 	// TODO:
-	// recieve merkle
+	// Send each key & last tx hash
 
 	var cnt int
 	err = st.IterTx(func(k []byte, kts *txlog.KeyTransactions) error {
-		// TODO:
-		// calcuate diff based on merkle and send delta
+		// TODO: only send transaction delta for the key.
 
-		// Send transactions
+		// Send all transactions
 		for _, tx := range kts.TxSlice {
-
 			fb.Reset()
 			fb.Finish(serializeTx(fb, tx))
 			pl := &chord.Payload{Data: fb.Bytes[fb.Head():]}
@@ -367,7 +376,7 @@ func (t *NetTransport) ReplicateTx(local, remote *chord.Vnode) error {
 		return err
 	}
 
-	log.Printf("action=replicated count=%d src=%s dst=%s", cnt, shortID(local), shortID(remote))
+	log.Printf("action=replicatetx status=ok count=%d src=%s dst=%s", cnt, shortID(local), shortID(remote))
 
 	_, err = stream.CloseAndRecv()
 	return err
@@ -405,7 +414,7 @@ func (t *NetTransport) ReplicateBlocks(local, remote *chord.Vnode) error {
 
 	// TODO: send missing blocks only
 
-	// Send blocks
+	// Send all blocks
 	err = st.IterBlocks(func(h []byte, data []byte) error {
 		fb.Reset()
 		fb.Finish(serializeByteSlice(fb, data))
@@ -580,26 +589,45 @@ func (t *NetTransport) ReplicateBlocksServe(stream netrpc.DifuseRPC_ReplicateBlo
 	return stream.SendAndClose(&chord.Payload{})
 }
 
-// ReplicateTxServe serves a ReplicateTx request.
-// TODO: use merkel tree to calculate transaction delta and replicate only that.
+// ReplicateTxServe serves a ReplicateTx request. It recieves the vnode id where data will be replicated to along
+// with the merkle root of the vnode store of the caller.  TODO: It will then request the missing tx's based on
+// the received merkle root by comparing against it's local merkle root to calculate the tx diff and only request
+// those tx's
 func (t *NetTransport) ReplicateTxServe(stream netrpc.DifuseRPC_ReplicateTxServeServer) error {
-	// Receive vnode from caller where incoming blocks will be written to.
+	// Receive from caller vnode where incoming blocks will be written to and merkle root
 	var req chord.Payload
 	err := stream.RecvMsg(&req)
 	if err != nil {
 		return err
 	}
-	// Deserialize vnode id
-	bs := fbtypes.GetRootAsByteSlice(req.Data, 0)
+	// Deserialize vnode id and remote store merkle.  The merkle root is the value
+	// that this store needs to be at.
+	bs := fbtypes.GetRootAsIdRoot(req.Data, 0)
+	mroot := bs.RootBytes()
+
+	//if !isZeroHash(posh) {
+	log.Printf("action=replicatetx vnode=%x root=%x", bs.IdBytes()[:8], mroot)
+	//}
+
 	// Get vnode store
-	st, err := t.local.GetStore(bs.BBytes())
+	st, err := t.local.GetStore(bs.IdBytes())
 	if err != nil {
 		return err
 	}
 
+	/*lmr, err := st.MerkleRootTx(nil)
+	if err != nil {
+		return err
+	}
+
+	// Vnode datastore is in-sync; so nothing to do; return
+	if txlog.EqualBytes(bs.RootBytes(), lmr) {
+		return stream.SendAndClose(&chord.Payload{})
+	}*/
+
 	// TODO:
-	// receive keys
-	// respond with associated hash
+	// receive merkle root of each key
+	// respond with delta tx's
 
 	// Receive transactions from remote
 	for {
@@ -617,6 +645,9 @@ func (t *NetTransport) ReplicateTxServe(stream netrpc.DifuseRPC_ReplicateTxServe
 		if e = st.AppendTx(tx); e != nil {
 			err = e
 		}
+
+		//fbir := fbtypes.GetRootAsIdRoot(payload.Data, 0)
+		//log.Printf("TODO: action=check_consistency key='%s' root=%x", fbir.IdBytes(), fbir.RootBytes())
 	}
 
 	if err != nil {

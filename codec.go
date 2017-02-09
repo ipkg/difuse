@@ -12,6 +12,16 @@ import (
 	"github.com/ipkg/difuse/txlog"
 )
 
+func serializeIdRoot(fb *flatbuffers.Builder, id, root []byte) flatbuffers.UOffsetT {
+	ip := fb.CreateByteString(id)
+	rp := fb.CreateByteString(root)
+
+	fbtypes.IdRootStart(fb)
+	fbtypes.IdRootAddId(fb, ip)
+	fbtypes.IdRootAddRoot(fb, rp)
+	return fbtypes.IdRootEnd(fb)
+}
+
 func serializeVnodeIdsBytes(key []byte, vns []*chord.Vnode) []byte {
 	fb := flatbuffers.NewBuilder(0)
 

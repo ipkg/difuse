@@ -144,6 +144,8 @@ func (txl *TxLog) applyTx(ktx *Tx) error {
 		}
 	return err
 	*/
+
+	// Add tx to log i.e. stable store.
 	if err := txl.store.Add(ktx); err != nil {
 		return err
 	}

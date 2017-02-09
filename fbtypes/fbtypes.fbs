@@ -70,7 +70,14 @@ table VnodeIdBytesErrList {
     L: [VnodeIdBytesErr];
 }
 
+// VnodeIdsBytes holds a list of vnode id's and a byte slice
 table VnodeIdsBytes {
     Ids:[ByteSlice];
     B: [ubyte];
+}
+
+// IdRoot hold a vnode id and the merkle root of it's store.
+table IdRoot {
+    Id:[ubyte];
+    Root: [ubyte];
 }
