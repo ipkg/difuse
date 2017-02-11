@@ -1,5 +1,7 @@
-//include "ipkg/go-chord/fbtypes.fbs";
-namespace fbtypes;
+
+include "github.com/ipkg/go-chord/fbtypes/fbtypes.fbs";
+
+namespace gentypes;
 
 table RequestOptions {
     Consistency: byte;
@@ -80,4 +82,15 @@ table VnodeIdsBytes {
 table IdRoot {
     Id:[ubyte];
     Root: [ubyte];
+}
+
+table TxRequest {
+    Id:[ubyte];
+    Key:[ubyte];
+    Seek:[ubyte];
+}
+
+table TransferRequest {
+    Src: fbtypes.Vnode;
+    Dst: fbtypes.Vnode;
 }

@@ -1,9 +1,6 @@
 package txlog
 
-import (
-	"github.com/btcsuite/fastsha256"
-	merkle "github.com/xsleonard/go-merkle"
-)
+import merkle "github.com/ipkg/go-merkle"
 
 // TxSlice contains a list of transactions
 type TxSlice []*Tx
@@ -42,13 +39,14 @@ func (txs TxSlice) MerkleTree() (*merkle.Tree, error) {
 	// encode transactions.
 	data := make([][]byte, len(txs))
 	for i, tx := range txs {
-		// Here data is provided as the merkellib takes in a hash function
+		// Here data is provided as the merkel lib takes in a hash function
 		data[i] = tx.Hash()
 	}
 
-	tree := merkle.NewTree()
-	err := tree.Generate(data, fastsha256.New())
-	return &tree, err
+	//tree := merkle.NewTree()
+	//err := tree.Generate(data, fastsha256.New())
+	//return &tree, err
+	return merkle.GenerateTree(data), nil
 }
 
 // MerkleRoot hash of the transaction slice
@@ -59,7 +57,7 @@ func (txs TxSlice) MerkleRoot() ([]byte, error) {
 
 	tree, err := txs.MerkleTree()
 	if err == nil {
-		return tree.Root().Hash, nil
+		return tree.Root().Hash(), nil
 	}
 
 	return ZeroHash(), err

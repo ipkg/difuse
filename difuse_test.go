@@ -61,8 +61,8 @@ func TestDifuseLookupLeader(t *testing.T) {
 
 	<-time.After(2 * time.Second)
 
-	tn1 := s1.transport.(*localTransport)
-	tn2 := s2.transport.(*localTransport)
+	tn1 := s1.transport
+	tn2 := s2.transport
 
 	if len(tn1.local) != 8 || len(tn2.local) != 8 {
 		t.Error("not all vn's init'd")

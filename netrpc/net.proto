@@ -9,6 +9,8 @@ service DifuseRPC {
     rpc AppendTxServe(chord.Payload) returns (chord.Payload) {}
     rpc LastTxServe(chord.Payload) returns (chord.Payload) {}
     rpc MerkleRootTxServe(chord.Payload) returns (chord.Payload) {}
+    // Transaction slice of a key from a given seek point
+    rpc TransactionsServe(chord.Payload) returns (stream chord.Payload) {}
 
     rpc StatServe(chord.Payload) returns (chord.Payload) {}
     rpc SetInodeServe(chord.Payload) returns (chord.Payload) {}
@@ -19,7 +21,8 @@ service DifuseRPC {
     rpc DeleteBlockServe(chord.Payload) returns (chord.Payload) {}
 
     rpc ReplicateBlocksServe(stream chord.Payload)returns (chord.Payload) {}
-    rpc ReplicateTxServe(stream chord.Payload)returns (chord.Payload) {}
+    // Transfer keys from local to remote vnode.
+    rpc TransferKeysServe(chord.Payload)returns (stream chord.Payload) {}
 
     rpc LookupLeaderServe(chord.Payload)returns (chord.Payload) {}
 }

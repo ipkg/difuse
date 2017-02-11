@@ -10,6 +10,7 @@ NAME="difused"
 
 [ -x "./${NAME}" ] || { echo "${NAME} not found!"; exit 1; }
 
+
 # Additional nodes aside from the first one
 COUNT=$1
 if [ "${COUNT}" == "" ]; then

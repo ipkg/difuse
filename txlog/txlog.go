@@ -116,7 +116,6 @@ func (txl *TxLog) Start() {
 			continue
 		}
 	}
-
 	txl.shutdown <- true
 }
 
@@ -128,24 +127,7 @@ func (txl *TxLog) updateQLastTx(ktx *Tx) {
 
 // applyTx applies a transaction to the log.
 func (txl *TxLog) applyTx(ktx *Tx) error {
-
-	/*err := txl.fsm.Apply(ktx)
-		if err != nil {
-			return err
-		}
-
-		if err = txl.store.Add(ktx); err == nil {
-			// update last tx taking into account the tx buffer
-			txl.txlock.Lock()
-			if v, ok := txl.lastQTx[string(ktx.Key)]; ok && EqualBytes(ktx.Hash(), v.Hash()) {
-				delete(txl.lastQTx, string(ktx.Key))
-			}
-			txl.txlock.Unlock()
-		}
-	return err
-	*/
-
-	// Add tx to log i.e. stable store.
+	// Add tx to log i.e. tx stable store.
 	if err := txl.store.Add(ktx); err != nil {
 		return err
 	}
@@ -155,8 +137,8 @@ func (txl *TxLog) applyTx(ktx *Tx) error {
 	}
 	txl.txlock.Unlock()
 
+	// Called user defined fsm
 	return txl.fsm.Apply(ktx)
-
 }
 
 // Shutdown closes the incoming tx channel and waits for a shutdown from the loop.

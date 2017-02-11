@@ -48,6 +48,7 @@ type DifuseRPCClient interface {
 	AppendTxServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error)
 	LastTxServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error)
 	MerkleRootTxServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error)
+	TransactionsServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (DifuseRPC_TransactionsServeClient, error)
 	StatServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error)
 	SetInodeServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error)
 	DeleteInodeServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error)
@@ -55,7 +56,7 @@ type DifuseRPCClient interface {
 	SetBlockServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error)
 	DeleteBlockServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error)
 	ReplicateBlocksServe(ctx context.Context, opts ...grpc.CallOption) (DifuseRPC_ReplicateBlocksServeClient, error)
-	ReplicateTxServe(ctx context.Context, opts ...grpc.CallOption) (DifuseRPC_ReplicateTxServeClient, error)
+	TransferKeysServe(ctx context.Context, opts ...grpc.CallOption) (DifuseRPC_TransferKeysServeClient, error)
 	LookupLeaderServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error)
 }
 
@@ -101,6 +102,38 @@ func (c *difuseRPCClient) MerkleRootTxServe(ctx context.Context, in *chord.Paylo
 		return nil, err
 	}
 	return out, nil
+}
+
+func (c *difuseRPCClient) TransactionsServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (DifuseRPC_TransactionsServeClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_DifuseRPC_serviceDesc.Streams[0], c.cc, "/netrpc.DifuseRPC/TransactionsServe", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &difuseRPCTransactionsServeClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type DifuseRPC_TransactionsServeClient interface {
+	Recv() (*chord.Payload, error)
+	grpc.ClientStream
+}
+
+type difuseRPCTransactionsServeClient struct {
+	grpc.ClientStream
+}
+
+func (x *difuseRPCTransactionsServeClient) Recv() (*chord.Payload, error) {
+	m := new(chord.Payload)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *difuseRPCClient) StatServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error) {
@@ -158,7 +191,7 @@ func (c *difuseRPCClient) DeleteBlockServe(ctx context.Context, in *chord.Payloa
 }
 
 func (c *difuseRPCClient) ReplicateBlocksServe(ctx context.Context, opts ...grpc.CallOption) (DifuseRPC_ReplicateBlocksServeClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_DifuseRPC_serviceDesc.Streams[0], c.cc, "/netrpc.DifuseRPC/ReplicateBlocksServe", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_DifuseRPC_serviceDesc.Streams[1], c.cc, "/netrpc.DifuseRPC/ReplicateBlocksServe", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -191,30 +224,30 @@ func (x *difuseRPCReplicateBlocksServeClient) CloseAndRecv() (*chord.Payload, er
 	return m, nil
 }
 
-func (c *difuseRPCClient) ReplicateTxServe(ctx context.Context, opts ...grpc.CallOption) (DifuseRPC_ReplicateTxServeClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_DifuseRPC_serviceDesc.Streams[1], c.cc, "/netrpc.DifuseRPC/ReplicateTxServe", opts...)
+func (c *difuseRPCClient) TransferKeysServe(ctx context.Context, opts ...grpc.CallOption) (DifuseRPC_TransferKeysServeClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_DifuseRPC_serviceDesc.Streams[2], c.cc, "/netrpc.DifuseRPC/TransferKeysServe", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &difuseRPCReplicateTxServeClient{stream}
+	x := &difuseRPCTransferKeysServeClient{stream}
 	return x, nil
 }
 
-type DifuseRPC_ReplicateTxServeClient interface {
+type DifuseRPC_TransferKeysServeClient interface {
 	Send(*chord.Payload) error
 	CloseAndRecv() (*chord.Payload, error)
 	grpc.ClientStream
 }
 
-type difuseRPCReplicateTxServeClient struct {
+type difuseRPCTransferKeysServeClient struct {
 	grpc.ClientStream
 }
 
-func (x *difuseRPCReplicateTxServeClient) Send(m *chord.Payload) error {
+func (x *difuseRPCTransferKeysServeClient) Send(m *chord.Payload) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *difuseRPCReplicateTxServeClient) CloseAndRecv() (*chord.Payload, error) {
+func (x *difuseRPCTransferKeysServeClient) CloseAndRecv() (*chord.Payload, error) {
 	if err := x.ClientStream.CloseSend(); err != nil {
 		return nil, err
 	}
@@ -241,6 +274,7 @@ type DifuseRPCServer interface {
 	AppendTxServe(context.Context, *chord.Payload) (*chord.Payload, error)
 	LastTxServe(context.Context, *chord.Payload) (*chord.Payload, error)
 	MerkleRootTxServe(context.Context, *chord.Payload) (*chord.Payload, error)
+	TransactionsServe(*chord.Payload, DifuseRPC_TransactionsServeServer) error
 	StatServe(context.Context, *chord.Payload) (*chord.Payload, error)
 	SetInodeServe(context.Context, *chord.Payload) (*chord.Payload, error)
 	DeleteInodeServe(context.Context, *chord.Payload) (*chord.Payload, error)
@@ -248,7 +282,7 @@ type DifuseRPCServer interface {
 	SetBlockServe(context.Context, *chord.Payload) (*chord.Payload, error)
 	DeleteBlockServe(context.Context, *chord.Payload) (*chord.Payload, error)
 	ReplicateBlocksServe(DifuseRPC_ReplicateBlocksServeServer) error
-	ReplicateTxServe(DifuseRPC_ReplicateTxServeServer) error
+	TransferKeysServe(DifuseRPC_TransferKeysServeServer) error
 	LookupLeaderServe(context.Context, *chord.Payload) (*chord.Payload, error)
 }
 
@@ -326,6 +360,27 @@ func _DifuseRPC_MerkleRootTxServe_Handler(srv interface{}, ctx context.Context, 
 		return srv.(DifuseRPCServer).MerkleRootTxServe(ctx, req.(*chord.Payload))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _DifuseRPC_TransactionsServe_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(chord.Payload)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(DifuseRPCServer).TransactionsServe(m, &difuseRPCTransactionsServeServer{stream})
+}
+
+type DifuseRPC_TransactionsServeServer interface {
+	Send(*chord.Payload) error
+	grpc.ServerStream
+}
+
+type difuseRPCTransactionsServeServer struct {
+	grpc.ServerStream
+}
+
+func (x *difuseRPCTransactionsServeServer) Send(m *chord.Payload) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _DifuseRPC_StatServe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -462,25 +517,25 @@ func (x *difuseRPCReplicateBlocksServeServer) Recv() (*chord.Payload, error) {
 	return m, nil
 }
 
-func _DifuseRPC_ReplicateTxServe_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(DifuseRPCServer).ReplicateTxServe(&difuseRPCReplicateTxServeServer{stream})
+func _DifuseRPC_TransferKeysServe_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(DifuseRPCServer).TransferKeysServe(&difuseRPCTransferKeysServeServer{stream})
 }
 
-type DifuseRPC_ReplicateTxServeServer interface {
+type DifuseRPC_TransferKeysServeServer interface {
 	SendAndClose(*chord.Payload) error
 	Recv() (*chord.Payload, error)
 	grpc.ServerStream
 }
 
-type difuseRPCReplicateTxServeServer struct {
+type difuseRPCTransferKeysServeServer struct {
 	grpc.ServerStream
 }
 
-func (x *difuseRPCReplicateTxServeServer) SendAndClose(m *chord.Payload) error {
+func (x *difuseRPCTransferKeysServeServer) SendAndClose(m *chord.Payload) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *difuseRPCReplicateTxServeServer) Recv() (*chord.Payload, error) {
+func (x *difuseRPCTransferKeysServeServer) Recv() (*chord.Payload, error) {
 	m := new(chord.Payload)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -557,13 +612,18 @@ var _DifuseRPC_serviceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
+			StreamName:    "TransactionsServe",
+			Handler:       _DifuseRPC_TransactionsServe_Handler,
+			ServerStreams: true,
+		},
+		{
 			StreamName:    "ReplicateBlocksServe",
 			Handler:       _DifuseRPC_ReplicateBlocksServe_Handler,
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "ReplicateTxServe",
-			Handler:       _DifuseRPC_ReplicateTxServe_Handler,
+			StreamName:    "TransferKeysServe",
+			Handler:       _DifuseRPC_TransferKeysServe_Handler,
 			ClientStreams: true,
 		},
 	},
@@ -573,21 +633,22 @@ var _DifuseRPC_serviceDesc = grpc.ServiceDesc{
 func init() { proto.RegisterFile("net.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 247 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x94, 0xd2, 0x4f, 0x4b, 0xc3, 0x30,
-	0x18, 0x06, 0x70, 0x77, 0x70, 0xd0, 0x57, 0x26, 0x33, 0x78, 0xda, 0x71, 0xa7, 0x5d, 0x96, 0x32,
-	0xff, 0x1d, 0xbc, 0xa9, 0x83, 0x21, 0x54, 0x18, 0xad, 0x5f, 0x20, 0x4b, 0x5e, 0xbb, 0xd2, 0x98,
-	0x37, 0xa4, 0x6f, 0x45, 0x3f, 0x98, 0xdf, 0x4f, 0x2c, 0xd2, 0x83, 0xa7, 0xe4, 0x18, 0x78, 0x7e,
-	0xe4, 0x09, 0x4f, 0x20, 0x73, 0xc8, 0xd2, 0x07, 0x62, 0x12, 0x53, 0x87, 0x1c, 0xbc, 0x5e, 0x2c,
-	0xeb, 0x86, 0x8f, 0xfd, 0x41, 0x6a, 0x7a, 0xcf, 0x1b, 0xdf, 0xd6, 0x79, 0x4d, 0x6b, 0x7d, 0xa4,
-	0x60, 0xf2, 0x31, 0x7b, 0xf5, 0x7d, 0x0a, 0xd9, 0xb6, 0x79, 0xeb, 0x3b, 0x2c, 0xf7, 0x4f, 0x42,
-	0x02, 0xec, 0x90, 0x5f, 0x3f, 0x2b, 0x0c, 0x1f, 0x28, 0xce, 0xe5, 0x90, 0x96, 0x7b, 0xf5, 0x65,
-	0x49, 0x99, 0xc5, 0xbf, 0xf3, 0xf2, 0x44, 0x6c, 0x60, 0xf6, 0xe0, 0x3d, 0x3a, 0x13, 0x4f, 0x72,
-	0x38, 0x2b, 0x54, 0x97, 0x70, 0xc7, 0x2d, 0x5c, 0xbc, 0x60, 0x68, 0x2d, 0x96, 0x44, 0x09, 0x6c,
-	0x0d, 0x59, 0xc5, 0x8a, 0x13, 0x5e, 0x52, 0x21, 0x3f, 0x3b, 0x32, 0x18, 0x4b, 0x6e, 0x60, 0xbe,
-	0x45, 0x8b, 0x8c, 0x49, 0x6a, 0x03, 0xb3, 0x1d, 0xf2, 0xa3, 0x25, 0xdd, 0xa6, 0x75, 0x4b, 0x22,
-	0x63, 0xb7, 0x24, 0x75, 0x0f, 0x97, 0x25, 0x7a, 0xdb, 0x68, 0xf5, 0x07, 0xbb, 0x48, 0xb9, 0x9a,
-	0x88, 0x3b, 0x98, 0x8f, 0x36, 0x7a, 0xa5, 0xd5, 0xe4, 0x77, 0xde, 0x82, 0xa8, 0xed, 0x7d, 0x81,
-	0xca, 0x60, 0x88, 0x84, 0x87, 0xe9, 0xf0, 0x7d, 0xaf, 0x7f, 0x02, 0x00, 0x00, 0xff, 0xff, 0xa7,
-	0x14, 0x62, 0x22, 0xf7, 0x02, 0x00, 0x00,
+	// 261 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x94, 0xd2, 0xc1, 0x4a, 0xc3, 0x40,
+	0x18, 0x04, 0x60, 0x7b, 0xb0, 0x90, 0x5f, 0x2a, 0x26, 0x78, 0xea, 0xb1, 0x27, 0x2f, 0x4d, 0xac,
+	0x5a, 0x04, 0x6f, 0x6a, 0xa1, 0x88, 0x11, 0x4a, 0xd2, 0x17, 0xd8, 0x6e, 0xa6, 0x69, 0x48, 0xdc,
+	0x7f, 0xd9, 0xfc, 0x11, 0xfb, 0xd4, 0xbe, 0x82, 0x50, 0x24, 0x07, 0x4f, 0xd9, 0xe3, 0xc2, 0x7c,
+	0xec, 0x30, 0xbb, 0x14, 0x18, 0x48, 0x6c, 0x1d, 0x0b, 0x47, 0x63, 0x03, 0x71, 0x56, 0x4f, 0x67,
+	0x65, 0x25, 0x87, 0x6e, 0x17, 0x6b, 0xfe, 0x4c, 0x2a, 0x5b, 0x97, 0x49, 0xc9, 0x73, 0x7d, 0x60,
+	0x57, 0x24, 0x7d, 0xf6, 0xee, 0xe7, 0x9c, 0x82, 0x55, 0xb5, 0xef, 0x5a, 0x64, 0x9b, 0xd7, 0x28,
+	0x26, 0x5a, 0x43, 0xb6, 0xdf, 0x39, 0xdc, 0x17, 0xa2, 0xcb, 0xf8, 0x94, 0x8e, 0x37, 0xea, 0xd8,
+	0xb0, 0x2a, 0xa6, 0xff, 0xce, 0xb3, 0xb3, 0x68, 0x41, 0x93, 0x67, 0x6b, 0x61, 0x8a, 0xe1, 0x24,
+	0xa1, 0x8b, 0x54, 0xb5, 0x1e, 0x77, 0x2c, 0x29, 0xfc, 0x80, 0xab, 0x1b, 0x64, 0xcc, 0x1e, 0xec,
+	0x91, 0xc2, 0xad, 0x53, 0xa6, 0x55, 0x5a, 0x2a, 0x36, 0xed, 0x40, 0x76, 0x3b, 0x8a, 0xe6, 0x14,
+	0xe4, 0xa2, 0xc4, 0x63, 0x82, 0x1c, 0xf2, 0x66, 0xb8, 0xc0, 0x50, 0xf2, 0x40, 0x57, 0x2b, 0x34,
+	0x10, 0x78, 0xa9, 0x05, 0x4d, 0xd6, 0x90, 0x97, 0x86, 0x75, 0xed, 0xd7, 0xcd, 0x8b, 0xf4, 0xdd,
+	0xbc, 0xd4, 0x13, 0x5d, 0x67, 0xb0, 0x4d, 0xa5, 0xd5, 0x1f, 0x1c, 0xba, 0xf7, 0xcd, 0xa8, 0x7f,
+	0xa8, 0x3d, 0xdc, 0x3b, 0x8e, 0x1e, 0x70, 0x49, 0x61, 0xca, 0x5c, 0x77, 0x36, 0x85, 0x2a, 0xe0,
+	0x06, 0xc2, 0xdd, 0xf8, 0xf4, 0xf1, 0xef, 0x7f, 0x03, 0x00, 0x00, 0xff, 0xff, 0x97, 0x5a, 0xae,
+	0xa4, 0x31, 0x03, 0x00, 0x00,
 }

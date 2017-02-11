@@ -24,6 +24,29 @@ func (nls localStore) GetStore(id []byte) (VnodeStore, error) {
 	return nil, errStoreNotFound
 }
 
+func (nls localStore) ReplicateTransactions(key, seek []byte, src, dst *chord.Vnode) error {
+	sstore, err := nls.GetStore(src.Id)
+	if err != nil {
+		return err
+	}
+
+	dstore, err := nls.GetStore(src.Id)
+	if err != nil {
+		return err
+	}
+
+	txs, err := sstore.Transactions(key, seek)
+	if err != nil {
+		return err
+	}
+	for _, tx := range txs {
+		if e := dstore.AppendTx(tx); e != nil {
+			err = e
+		}
+	}
+	return err
+}
+
 /*// Snapshot snapshots a vnode store returning a Reader
 func (nls localStore) Snapshot(vn *chord.Vnode) (io.ReadCloser, error) {
 	st := nls.GetStore(vn.Id)

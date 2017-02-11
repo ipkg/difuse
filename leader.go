@@ -2,7 +2,6 @@ package difuse
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/ipkg/difuse/txlog"
 	chord "github.com/ipkg/go-chord"
@@ -130,7 +129,7 @@ func (s *Difuse) appendTx(txtype byte, key, data []byte, opts *RequestOptions) (
 		go func(vmap map[string][]*chord.Vnode, ktx *txlog.Tx, options RequestOptions) {
 
 			for _, vns := range vmap {
-				resp, err := s.transport.AppendTx(ktx, &options, vns...)
+				/*resp, err := s.transport.AppendTx(ktx, &options, vns...)
 				if err != nil {
 					log.Printf("action=appendtx status=failed key=%s msg='%v'", ktx.Key, err)
 					continue
@@ -140,7 +139,9 @@ func (s *Difuse) appendTx(txtype byte, key, data []byte, opts *RequestOptions) (
 					if rsp.Err != nil {
 						log.Printf("action=appendtx status=failed key=%s vn=%x msg='%v'", ktx.Key, rsp.Id[:8], rsp.Err)
 					}
-				}
+				}*/
+				s.transport.AppendTx(ktx, &options, vns...)
+
 			}
 
 		}(vm, tx, *opts)

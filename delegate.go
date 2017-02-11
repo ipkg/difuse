@@ -20,15 +20,13 @@ func (s *Difuse) NewPredecessor(local, remoteNew, remotePrev *chord.Vnode) {
 		return
 	}
 
-	// TODO: check if we have remoteNew.Host key
-	// TODO: queue clone rather than running it now.
-	if err := s.transport.ReplicateBlocks(local, remoteNew); err != nil {
-		log.Printf("ERR Block replication failed: %s --> %s %v", shortID(local), shortID(remoteNew), err)
+	// TODO: queue rather than running right away
+	if err := s.transport.TransferKeys(local, remoteNew); err != nil {
+		log.Printf("action=transfer status=failed src=%s dst=%s msg='%v'", shortID(local), shortID(remoteNew), err)
 	}
 
-	// TODO: queue rather than running right away
-	if err := s.transport.ReplicateTx(local, remoteNew); err != nil {
-		log.Printf("action=replicate status=failed src=%s dst=%s msg='%v'", shortID(local), shortID(remoteNew), err)
+	if err := s.transport.ReplicateBlocks(local, remoteNew); err != nil {
+		log.Printf("action=replicate-blocks status=failed msg='%v'", err)
 	}
 }
 

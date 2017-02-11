@@ -1,6 +1,7 @@
 package difuse
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/ipkg/difuse/store"
@@ -91,6 +92,20 @@ func (lt *localTransport) AppendTx(tx *txlog.Tx, options *RequestOptions, vl ...
 	return lt.remote.AppendTx(tx, options, vl...)
 }
 
+// ReplicateTransactions replicates transactions from remote to local.  If remote is a local vnode then
+// then replication is assumed to be among two local vnodes.
+func (lt *localTransport) ReplicateTransactions(key, seek []byte, src, dst *chord.Vnode) error {
+	if src.Host != lt.host && dst.Host != lt.host {
+		return fmt.Errorf("remote to remote replication")
+	} else if src.Host == lt.host && dst.Host == lt.host {
+		return lt.local.ReplicateTransactions(key, seek, src, dst)
+	} else if src.Host != lt.host {
+		return lt.remote.ReplicateTransactions(key, seek, src, dst)
+	} else {
+		return lt.remote.ReplicateTransactions(key, seek, dst, src)
+	}
+}
+
 func (lt *localTransport) GetTx(key, txhash []byte, options *RequestOptions, vl ...*chord.Vnode) ([]*VnodeResponse, error) {
 	if vl[0].Host == lt.host {
 		return lt.local.GetTx(key, txhash, options, vl...)
@@ -119,10 +134,8 @@ func (lt *localTransport) NewTx(key []byte, vl ...*chord.Vnode) ([]*VnodeRespons
 	return lt.remote.NewTx(key, vl...)
 }
 
-// ReplicateTx replicats transactions from a local vnode to a remote one. i.e.
-// pushes tx's to the specified remote vnode.
-func (lt *localTransport) ReplicateTx(src, dst *chord.Vnode) error {
-	return lt.remote.ReplicateTx(src, dst)
+func (lt *localTransport) TransferKeys(src, dst *chord.Vnode) error {
+	return lt.remote.TransferKeys(src, dst)
 }
 
 // set request for remote on leader

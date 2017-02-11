@@ -5,14 +5,16 @@ difuse is a new breed of truly distributed multi-purpose datastore.
 Current distributed systems follow a leader/follower model and rely on a fixed leader
 for consensus.  This eventually limits the scalability of the cluster.
 
-difuse uses a completely distributed approach in that no node is special and is treated
-equally. Each node is the leader for a portion of keys in the cluster.  As nodes join
-and leave, keys are re-balanced based across the new set of nodes.  This is accomplished
-by using a Distributed Hash Table as the underlying transport.
+difuse uses a completely distributed No-One-Special (NOS) approach in that every node in the
+cluster is equal and no node is designated to perform anything different.  Each node is the leader
+for a portion of keys in the cluster.  As nodes join and leave, keys are re-balanced across the new
+set of nodes.  
+
+This is accomplished by using a Distributed Hash Table as the underlying transport.
 
 ## Features
 
-- Each node is of equal weight. No single leader and no one is special.
+- Each node is of equal weight. No single leader and No-One-Special (NOS).
 - Highly-Scalable fault tolerant due to the peer-to-peer design
 - Data de-duplication
 
@@ -47,7 +49,7 @@ or [http://localhost:9091](http://localhost:9091)
     - [ ] Jepsen tests
 
 ## Design
-To Be Added
+This portion outlines the internal architecture and design of difuse.
 
 ### Writes
 Difuse has 2 types of writes:

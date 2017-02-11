@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 
 	"github.com/btcsuite/fastsha256"
 	flatbuffers "github.com/google/flatbuffers/go"
@@ -16,6 +17,8 @@ import (
 
 const (
 	errInvalidDataType = "invalid data type: %#v"
+
+	replicationQSize = 128
 )
 
 var (
@@ -29,18 +32,23 @@ type VnodeStore interface {
 	GetTx(key []byte, txhash []byte) (*txlog.Tx, error)
 	NewTx(key []byte) (*txlog.Tx, error)
 	LastTx(key []byte) (*txlog.Tx, error)
-	IterTx(func([]byte, *txlog.KeyTransactions) error) error
+	IterTx(func(key []byte, keytxs *txlog.KeyTransactions) error) error
 	// MerkleRoot of all transactions for the given key
 	MerkleRootTx(key []byte) ([]byte, error)
-
+	// Transactions returns transactions starting from the seek point.  If seek is
+	// nil, all transactions are returned.
+	Transactions(key, seek []byte) (txlog.TxSlice, error)
 	// Iterate over all inodes in the store.
-	IterInodes(func([]byte, *store.Inode) error) error
+	IterInodes(func(key []byte, inode *store.Inode) error) error
+	// Return the inode for the given key or error
 	Stat(key []byte) (*store.Inode, error)
 
-	// This sets the value without the use of transactions returning the hash of the data
+	// Sets the value without the use of transactions returning the hash of the data
 	// as the key.
 	SetBlock(data []byte) ([]byte, error)
+	// Gets block by its hash key
 	GetBlock(hash []byte) ([]byte, error)
+	// Deletes a block by hash key
 	DeleteBlock(hash []byte) error
 	// Iterate over all blocks in the store.
 	IterBlocks(func([]byte, []byte) error) error
@@ -72,8 +80,12 @@ type Transport interface {
 	LastTx(key []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
 	MerkleRootTx(key []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
 	NewTx(key []byte, vs ...*chord.Vnode) ([]*VnodeResponse, error)
-	// Replicate transactions from the local vnode to the remote one.
-	ReplicateTx(src, dst *chord.Vnode) error
+	// Replicate transactions from remote to local vnode for the key starting at the
+	// seek hash.
+	ReplicateTransactions(key, seek []byte, remote, local *chord.Vnode) error
+
+	// Transfer keys from the local vnode to the remote one.
+	TransferKeys(src, dst *chord.Vnode) error
 
 	// Lookup the leader for the given key on the given host returning the leader, an ordered list of
 	// other vnodes as well as a host-to-vnode map.
@@ -82,6 +94,7 @@ type Transport interface {
 	// RegisterVnode registers a datastore for a vnode.
 	RegisterVnode(*chord.Vnode, VnodeStore)
 	Register(ConsistentStore)
+	RegisterReplicationQ(chan<- *ReplRequest)
 }
 
 // ConsistentStore implements consistent store methods using the underlying ring methods.
@@ -100,7 +113,9 @@ type Difuse struct {
 	ring   *chord.Ring
 	config *Config
 
-	transport Transport
+	transport *localTransport
+
+	replQ chan *ReplRequest
 }
 
 // NewDifuse instantiates a new Difuse instance, generating a new keypair and setting the
@@ -110,10 +125,39 @@ func NewDifuse(conf *Config, trans Transport) *Difuse {
 	slt := &Difuse{
 		config:   conf,
 		signator: sig,
+		replQ:    make(chan *ReplRequest, replicationQSize),
 	}
 
 	slt.transport = newLocalTransport(trans, slt)
+
+	trans.RegisterReplicationQ(slt.replQ)
+	go slt.startReplEngine()
+
 	return slt
+}
+
+func (s *Difuse) startReplEngine() {
+
+	for rr := range s.replQ {
+
+		st, err := s.transport.local.GetStore(rr.Dst.Id)
+		if err != nil {
+			log.Println("ERR", err)
+			continue
+		}
+
+		var hh []byte
+		ltx, err := st.LastTx(rr.Key)
+		if err == nil {
+			hh = ltx.Hash()
+		}
+
+		s.transport.ReplicateTransactions(rr.Key, hh, rr.Src, rr.Dst)
+		//if err = s.transport.ReplicateTransactions(rr.Key, hh, rr.Src, rr.Dst); err != nil {
+		//	log.Printf("ERR key='%s' msg='%v'", rr.Key, err)
+		//}
+
+	}
 }
 
 // RegisterRing registers the chord ring to the difuse instance.

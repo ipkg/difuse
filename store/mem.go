@@ -15,7 +15,7 @@ import (
 
 	chord "github.com/ipkg/go-chord"
 
-	"github.com/ipkg/difuse/fbtypes"
+	"github.com/ipkg/difuse/gentypes"
 	"github.com/ipkg/difuse/txlog"
 )
 
@@ -62,7 +62,7 @@ func (mem *MemLoggedStore) Apply(ktx *txlog.Tx) error {
 func (mem *MemLoggedStore) applySetKey(key, value []byte) error {
 	rk := &Inode{}
 
-	ind := fbtypes.GetRootAsInode(value, 0)
+	ind := gentypes.GetRootAsInode(value, 0)
 	rk.Deserialize(ind)
 
 	// Set the merkle root of all tx's for this key. This is based on the local
@@ -98,6 +98,10 @@ func (mem *MemDataStore) applyDeleteKey(key []byte) error {
 // MerkleRootTx returns the merkle root of all transactions for a given key
 func (mem *MemLoggedStore) MerkleRootTx(key []byte) ([]byte, error) {
 	return mem.txstore.MerkleRoot(key)
+}
+
+func (mem *MemLoggedStore) Transactions(key, seek []byte) (txlog.TxSlice, error) {
+	return mem.txstore.Transactions(key, seek)
 }
 
 // GetTx gets a transaction from the store

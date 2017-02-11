@@ -7,7 +7,7 @@ import (
 	"github.com/btcsuite/fastsha256"
 	flatbuffers "github.com/google/flatbuffers/go"
 
-	"github.com/ipkg/difuse/fbtypes"
+	"github.com/ipkg/difuse/gentypes"
 	"github.com/ipkg/difuse/txlog"
 )
 
@@ -72,7 +72,7 @@ func (r *Inode) MarshalJSON() ([]byte, error) {
 }
 
 // Deserialize deserializes the flatbuffer object into a Inode
-func (r *Inode) Deserialize(ind *fbtypes.Inode) {
+func (r *Inode) Deserialize(ind *gentypes.Inode) {
 
 	r.Id = ind.IdBytes()
 	r.Size = ind.Size()
@@ -82,7 +82,7 @@ func (r *Inode) Deserialize(ind *fbtypes.Inode) {
 	l := ind.BlocksLength()
 	bh := make([][]byte, l)
 	for i := 0; i < l; i++ {
-		var obj fbtypes.ByteSlice
+		var obj gentypes.ByteSlice
 		ind.Blocks(&obj, i)
 		// deserialize flatbuffer in reverse order to get the actual order
 		bh[l-i-1] = obj.BBytes()
@@ -97,12 +97,12 @@ func (r *Inode) Serialize(fb *flatbuffers.Builder) flatbuffers.UOffsetT {
 
 	for i, v := range r.Blocks {
 		bhp := fb.CreateByteString(v)
-		fbtypes.ByteSliceStart(fb)
-		fbtypes.ByteSliceAddB(fb, bhp)
-		obh[i] = fbtypes.ByteSliceEnd(fb)
+		gentypes.ByteSliceStart(fb)
+		gentypes.ByteSliceAddB(fb, bhp)
+		obh[i] = gentypes.ByteSliceEnd(fb)
 	}
 
-	fbtypes.InodeStartBlocksVector(fb, len(r.Blocks))
+	gentypes.InodeStartBlocksVector(fb, len(r.Blocks))
 	for _, v := range obh {
 		fb.PrependUOffsetT(v)
 	}
@@ -110,13 +110,13 @@ func (r *Inode) Serialize(fb *flatbuffers.Builder) flatbuffers.UOffsetT {
 	kp := fb.CreateByteString(r.Id)
 	rp := fb.CreateByteString(r.txroot)
 
-	fbtypes.InodeStart(fb)
-	fbtypes.InodeAddId(fb, kp)
-	fbtypes.InodeAddBlocks(fb, bh)
-	fbtypes.InodeAddSize(fb, r.Size)
-	fbtypes.InodeAddRoot(fb, rp)
+	gentypes.InodeStart(fb)
+	gentypes.InodeAddId(fb, kp)
+	gentypes.InodeAddBlocks(fb, bh)
+	gentypes.InodeAddSize(fb, r.Size)
+	gentypes.InodeAddRoot(fb, rp)
 	if r.Inline {
-		fbtypes.InodeAddInline(fb, byte(1))
+		gentypes.InodeAddInline(fb, byte(1))
 	}
-	return fbtypes.InodeEnd(fb)
+	return gentypes.InodeEnd(fb)
 }

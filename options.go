@@ -1,5 +1,7 @@
 package difuse
 
+import chord "github.com/ipkg/go-chord"
+
 // ConsistencyLevel holds the consistency configuration for an operation
 type ConsistencyLevel uint8
 
@@ -50,3 +52,9 @@ func (ro *RequestOptions) Serialize(fb *flatbuffers.Builder) flatbuffers.UOffset
 	fbtypes.RequestOptionsAddConsistency(fb, int8(ro.Consistency))
 	return fbtypes.RequestOptionsEnd(fb)
 }*/
+
+type ReplRequest struct {
+	Src *chord.Vnode
+	Dst *chord.Vnode
+	Key []byte
+}

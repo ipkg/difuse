@@ -23,7 +23,7 @@ deps:
 
 fbs:
 	rm -rf fbtypes/*.go
-	flatc -I ../../ -g ./fbtypes/fbtypes.fbs
+	flatc -I ../../../ -I . -g ./gentypes/fbtypes.fbs
 
 protoc:
 	protoc -I ../../../ -I ./netrpc ./netrpc/net.proto --go_out=plugins=grpc:./netrpc

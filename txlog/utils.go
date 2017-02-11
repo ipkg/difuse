@@ -76,3 +76,12 @@ func EqualBytes(a, b []byte) bool {
 	}
 	return true
 }
+
+func IsZeroHash(b []byte) bool {
+	for _, v := range b {
+		if v != 0 {
+			return false
+		}
+	}
+	return true
+}

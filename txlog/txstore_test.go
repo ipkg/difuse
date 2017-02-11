@@ -3,21 +3,21 @@ package txlog
 import (
 	"fmt"
 	"testing"
-
-	"github.com/xsleonard/go-merkle"
 )
 
 func prepTxStore(txcount int) *MemTxStore {
+	//kp, _ := GenerateECDSAKeypair()
 	st := NewMemTxStore()
 	for i := 0; i < txcount; i++ {
 		key := []byte(fmt.Sprintf("key%d", i))
 		tx := NewTx(key, nil, []byte(fmt.Sprintf("data%d", i)))
+		//tx.Sign(kp)
 		st.Add(tx)
 	}
 	return st
 }
 
-func TestTxStore(t *testing.T) {
+func TestTxStoreMerkleRoot(t *testing.T) {
 	st1 := prepTxStore(5)
 	st2 := prepTxStore(5)
 
@@ -68,7 +68,11 @@ func TestTxStoreMerkle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	n := findLevel(&kmt1, &kmt2)
+	if EqualBytes(kmt1.Root().Hash(), kmt2.Root().Hash()) {
+		t.Fatal("root hashes should not match")
+	}
+
+	/*n := findLevel(&kmt1, &kmt2)
 	if n < 0 {
 		t.Fatal("not found")
 	}
@@ -76,10 +80,10 @@ func TestTxStoreMerkle(t *testing.T) {
 	//nodes := kmt1.GetNodesAtHeight(uint64(n))
 
 	dumpTree(&kmt1)
-	dumpTree(&kmt2)
+	dumpTree(&kmt2)*/
 }
 
-func dumpTree(t *merkle.Tree) {
+/*func dumpTree(t *merkle.Tree) {
 	fmt.Println("TREE")
 	h := t.Height()
 	for i := uint64(0); i < h; i++ {
@@ -107,4 +111,4 @@ func findLevel(t1, t2 *merkle.Tree) int64 {
 	}
 
 	return -1
-}
+}*/

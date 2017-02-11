@@ -4,18 +4,20 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/btcsuite/fastsha256"
-	merkle "github.com/xsleonard/go-merkle"
+	merkle "github.com/ipkg/go-merkle"
 )
 
 // TxStore persists transactions to data store.
 type TxStore interface {
 	Get(key []byte, txhash []byte) (*Tx, error)
-	First(key []byte) (*Tx, error)
+	//First(key []byte) (*Tx, error)
 	Last(key []byte) (*Tx, error)
 	// Returns the merkle root of the transactions for a given key.  If key is nil the
 	// merkle root of the complete store should be returned.
 	MerkleRoot(key []byte) ([]byte, error)
+	// Return all transactions for key from the given seek position.  If seek is nil,
+	// all transactions are returned
+	Transactions(key, seek []byte) (TxSlice, error)
 	// Add a transaction to the store.
 	Add(tx *Tx) error
 	// Iterate over each key - calling f on each key with the key and transaction
@@ -56,7 +58,7 @@ func (mts *MemTxStore) Last(key []byte) (*Tx, error) {
 	defer mts.mu.RUnlock()
 
 	if txs, ok := mts.m[string(key)]; ok {
-		if t := txs.Last(); t != nil {
+		if t := txs.txs.Last(); t != nil {
 			return t, nil
 		}
 	}
@@ -81,7 +83,19 @@ func (mts *MemTxStore) MerkleRoot(key []byte) ([]byte, error) {
 	return nil, errNotFound
 }
 
-// First returns the first transaction for a key
+func (mts *MemTxStore) Transactions(key, seek []byte) (TxSlice, error) {
+	mts.mu.RLock()
+	defer mts.mu.RUnlock()
+
+	v, ok := mts.m[string(key)]
+	if !ok {
+		return nil, errNotFound
+	}
+
+	return v.Transactions(seek)
+}
+
+/*// First returns the first transaction for a key
 func (mts *MemTxStore) First(key []byte) (*Tx, error) {
 	mts.mu.RLock()
 	defer mts.mu.RUnlock()
@@ -93,7 +107,7 @@ func (mts *MemTxStore) First(key []byte) (*Tx, error) {
 	}
 
 	return nil, errNotFound
-}
+}*/
 
 // Add adds a transaction to the transaction store.
 func (mts *MemTxStore) Add(tx *Tx) error {
@@ -116,7 +130,7 @@ func (mts *MemTxStore) Add(tx *Tx) error {
 // Get geta a transaction for a given key and associated hash
 func (mts *MemTxStore) Get(key []byte, txhash []byte) (*Tx, error) {
 	if txs, ok := mts.m[string(key)]; ok {
-		for _, tx := range txs.TxSlice {
+		for _, tx := range txs.txs {
 			if EqualBytes(tx.Hash(), txhash) {
 				return tx, nil
 			}
@@ -126,18 +140,14 @@ func (mts *MemTxStore) Get(key []byte, txhash []byte) (*Tx, error) {
 	return nil, errNotFound
 }
 
-func (mts *MemTxStore) keysMerkleTree() (merkle.Tree, error) {
+func (mts *MemTxStore) keysMerkleTree() (*merkle.Tree, error) {
 	ks := mts.getSortedKeys()
 	keys := make([][]byte, len(ks))
 	for i, v := range ks {
-		//sh := fastsha256.Sum256([]byte(v))
-		//keys[i] = sh[:]
 		keys[i] = []byte(v)
 	}
 
-	mtree := merkle.NewTree()
-	err := mtree.Generate(keys, fastsha256.New())
-	return mtree, err
+	return merkle.GenerateTree(keys), nil
 }
 
 func (mts *MemTxStore) getSortedKeys() []string {
@@ -162,15 +172,17 @@ func (mts *MemTxStore) storeMerkleRoot() ([]byte, error) {
 	mrs := make([][]byte, klen)
 	for i, k := range keys {
 		var err error
-		if mrs[i], err = mts.m[k].MerkleRoot(); err != nil {
+		if mrs[i], err = mts.m[k].txs.MerkleRoot(); err != nil {
 			return nil, err
 		}
 	}
 
-	mtree := merkle.NewTree()
+	tree := merkle.GenerateTree(mrs)
+	return tree.Root().Hash(), nil
+	/*mtree := merkle.NewTree()
 	if err := mtree.Generate(mrs, fastsha256.New()); err != nil {
 		return nil, err
 	}
 
-	return mtree.Root().Hash, nil
+	return mtree.Root().Hash, nil*/
 }
