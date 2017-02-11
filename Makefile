@@ -36,8 +36,8 @@ ${NAME}:
 
 dist:
 	@# Darwin
-	GOOS=darwin ${BUILD_CMD} -o ${NAME}-darwin cmd/*.go
+	GOOS=darwin ${BUILD_CMD} ${LD_OPTS} -o ${NAME}-darwin cmd/*.go
 	@# Linux
-	GOOS=linux ${BUILD_CMD} -o ${NAME}-linux cmd/*.go
+	GOOS=linux ${BUILD_CMD} ${LD_OPTS} -o ${NAME}-linux cmd/*.go
 	@# Windows
-	GOOS=windows ${BUILD_CMD} -o ${NAME}-win cmd/*.go
+	GOOS=windows ${BUILD_CMD} ${LD_OPTS} -o ${NAME}-win cmd/*.go
