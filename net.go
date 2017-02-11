@@ -29,10 +29,9 @@ type NetTransport struct {
 	lock  sync.Mutex
 	local localStore
 
-	clock sync.Mutex
-	out   map[string]*outConn
-	// consistent storage interface
-	cs ConsistentStore
+	clock sync.RWMutex        // outbound connection lock
+	out   map[string]*outConn // outbound connecitons
+	cs    ConsistentStore     // consistent storage interface
 
 	replq chan<- *ReplRequest
 }
@@ -45,9 +44,12 @@ func NewNetTransport() *NetTransport {
 }
 
 func (t *NetTransport) getConn(host string) (*outConn, error) {
+	t.clock.RLock()
 	if v, ok := t.out[host]; ok {
+		defer t.clock.RUnlock()
 		return v, nil
 	}
+	t.clock.RUnlock()
 
 	conn, err := grpc.Dial(host, grpc.WithInsecure(), grpc.WithCodec(&chord.PayloadCodec{}))
 	if err != nil {

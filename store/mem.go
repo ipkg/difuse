@@ -173,8 +173,13 @@ func (ms *MemDataStore) Stat(key []byte) (*Inode, error) {
 	return nil, errKeyNotFound
 }
 
+// IterBlocks iterates over all the blocks in the store.  This obtains a read-lock.
 func (ms *MemDataStore) IterBlocks(f func(k, v []byte) error) error {
 	var e error
+
+	ms.clock.Lock()
+	defer ms.clock.Unlock()
+
 	for k, v := range ms.cad {
 		kb, err := hex.DecodeString(k)
 		if err != nil {
