@@ -1,22 +1,23 @@
 # difuse [![Build Status](https://travis-ci.org/ipkg/difuse.svg?branch=master)](https://travis-ci.org/ipkg/difuse)
 
-difuse is a new breed of truly distributed multi-purpose datastore.  
+difuse is a new breed of truly distributed datastores.  
 
 Current distributed systems follow a leader/follower model and rely on a fixed leader
-for consensus.  This eventually limits the scalability of the cluster.
+for consensus. This eventually limits the scalability of the cluster.  difuse contains
+multiple leaders through out the cluster.  All nodes perform the same function and are
+responsible for a portion of the data.
 
 difuse uses a completely distributed No-One-Special (NOS) approach in that every node in the
-cluster is equal and no node is designated to perform anything different.  Each node is the leader
-for a portion of keys in the cluster.  As nodes join and leave, keys are re-balanced across the new
-set of nodes.  
-
-This is accomplished by using a Distributed Hash Table as the underlying transport.
+cluster is equal and no node is designated to perform anything different or special.  Each
+node is the leader for a portion of keys in the cluster.  As nodes join and leave, data is
+re-balanced/replicated across the new set of nodes.
 
 ## Features
 
 - Each node is of equal weight. No single leader and No-One-Special (NOS).
-- Highly-Scalable fault tolerant due to the peer-to-peer design
+- Highly-Scalable, fault-tolerant due to the peer-to-peer design
 - Data de-duplication
+
 
 ## Installation
 Download the binary from [here].
@@ -50,6 +51,8 @@ or [http://localhost:9091](http://localhost:9091)
 
 ## Design
 This portion outlines the internal architecture and design of difuse.
+
+difuse uses a Distributed Hash Table to perform much of it's work.  
 
 ### Writes
 Difuse has 2 types of writes:

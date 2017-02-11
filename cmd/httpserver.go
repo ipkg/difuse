@@ -71,6 +71,37 @@ func (hs *httpServer) handleData(w http.ResponseWriter, r *http.Request) (interf
 	return data, err
 }
 
+func (hs *httpServer) handleLocate(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+	var (
+		spath = strings.TrimPrefix(r.URL.Path[1:], "locate/")
+		ct    = newCallTimer()
+		data  interface{}
+		err   error
+		etime float64
+	)
+
+	switch {
+	case strings.HasPrefix(spath, "tx/last/"):
+		key := strings.TrimPrefix(spath, "tx/last/")
+		ct.start()
+		data, err = hs.tt.LocateLastTx([]byte(key))
+		etime = ct.stop()
+
+	case strings.HasPrefix(spath, "inode/"):
+		key := strings.TrimPrefix(spath, "inode/")
+		ct.start()
+		data, err = hs.tt.LocateInode([]byte(key))
+		etime = ct.stop()
+
+	default:
+		return nil, fmt.Errorf("not found")
+
+	}
+
+	w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", etime))
+	return data, err
+}
+
 func (hs *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upath := r.URL.Path[1:]
 
@@ -79,13 +110,15 @@ func (hs *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		data  interface{}
 		err   error
 		etime float64
+
+		meta = &difuse.ResponseMeta{}
+		opts = parseOptions(r)
 	)
 
 	switch {
 	case strings.HasPrefix(upath, "stat/"):
 		kstr := strings.TrimPrefix(upath, "stat/")
-		meta := &difuse.ResponseMeta{}
-		opts := parseOptions(r)
+
 		if opts == nil {
 			ct.start()
 			data, meta, err = hs.tt.Stat([]byte(kstr))
@@ -120,6 +153,9 @@ func (hs *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				//"hosts":  vm,
 			}
 		}
+
+	case strings.HasPrefix(upath, "locate/"):
+		data, err = hs.handleLocate(w, r)
 
 	default:
 		data, err = hs.handleData(w, r)

@@ -364,16 +364,6 @@ func (t *NetTransport) TransferKeys(local, remote *chord.Vnode) error {
 		return err
 	}
 
-	// Build vnode id and datastore merkle root to flatbuffer.
-	/*mroot, err := st.MerkleRootTx(nil)
-	if err != nil {
-		return err
-	}
-	// Return if we have no data
-	if isZeroHash(mroot) {
-		return nil
-	}*/
-
 	// Get remote conn
 	out, err := t.getConn(remote.Host)
 	if err != nil {
@@ -390,7 +380,6 @@ func (t *NetTransport) TransferKeys(local, remote *chord.Vnode) error {
 	fb := flatbuffers.NewBuilder(0)
 
 	fb.Finish(serializeTransferRequest(fb, local, remote))
-	//fb.Finish(serializeIdRoot(fb, remote.Id, txlog.ZeroHash()))
 
 	// Send remote vnode id and local vnode merkle to remote
 	req := &chord.Payload{Data: fb.Bytes[fb.Head():]}

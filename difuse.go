@@ -174,6 +174,8 @@ func (s *Difuse) Get(key []byte, options ...RequestOptions) ([]byte, *ResponseMe
 		return nil, meta, err
 	}
 
+	log.Println(inode, meta, err)
+
 	out := make([]byte, 0, inode.Size)
 	for _, bh := range inode.Blocks {
 

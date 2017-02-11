@@ -1,6 +1,7 @@
 package difuse
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -14,6 +15,22 @@ type VnodeResponse struct {
 	Id   []byte // vnode id
 	Data interface{}
 	Err  error
+}
+
+func (vr *VnodeResponse) MarshalJSON() ([]byte, error) {
+	o := map[string]interface{}{
+		"vnode": string(vr.Id),
+	}
+
+	if vr.Data != nil {
+		o["data"] = vr.Data
+	}
+
+	if vr.Err != nil {
+		o["error"] = vr.Err.Error()
+	}
+
+	return json.Marshal(o)
 }
 
 // ResponseMeta contains response metadata

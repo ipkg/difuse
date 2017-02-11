@@ -1,6 +1,11 @@
 package txlog
 
-import "github.com/btcsuite/fastsha256"
+import (
+	"encoding/hex"
+	"encoding/json"
+
+	"github.com/btcsuite/fastsha256"
+)
 
 // Signator is used to sign a transaction
 type Signator interface {
@@ -64,6 +69,15 @@ type Tx struct {
 	Signature []byte
 	Key       []byte
 	Data      []byte
+}
+
+func (t *Tx) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]string{
+		"prev": hex.EncodeToString(t.PrevHash),
+		"id":   hex.EncodeToString(t.Hash()),
+		"key":  string(t.Key),
+		//"signature": hex.EncodeToString(t.Signature),
+	})
 }
 
 // NewTx given the previous tx hash, data and optional public keys

@@ -173,4 +173,7 @@ func TestDifuseSetStat(t *testing.T) {
 		t.Fatal("should fail")
 	}
 
+	/*if _, _, err = s1.LastTx(testkey); err != nil {
+		t.Fatal(err)
+	}*/
 }
