@@ -17,6 +17,7 @@ type VnodeResponse struct {
 	Err  error
 }
 
+// MarshalJSON is a custom json encoder to handler errors and formatting.
 func (vr *VnodeResponse) MarshalJSON() ([]byte, error) {
 	o := map[string]interface{}{
 		"vnode": string(vr.Id),

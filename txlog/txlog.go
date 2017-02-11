@@ -79,7 +79,13 @@ func (txl *TxLog) NewTx(key []byte) (*Tx, error) {
 
 // AppendTx to the log.  Verfiy the signature before submitting to the channel.
 func (txl *TxLog) AppendTx(ktx *Tx) error {
-	err := ktx.VerifySignature(txl.kp)
+	// Check if we have ktx in the our store.
+	_, err := txl.store.Get(ktx.Key, ktx.Hash())
+	if err == nil {
+		return nil
+	}
+
+	err = ktx.VerifySignature(txl.kp)
 	if err != nil {
 		return err
 	}

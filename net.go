@@ -29,57 +29,18 @@ type NetTransport struct {
 	lock  sync.Mutex
 	local localStore
 
-	clock sync.RWMutex        // outbound connection lock
-	out   map[string]*outConn // outbound connecitons
 	cs    ConsistentStore     // consistent storage interface
-
-	replq chan<- *ReplRequest
+	clock sync.RWMutex        // outbound connection lock
+	out   map[string]*outConn // outbound connections
+	replq chan<- *ReplRequest // q to send replication requests to
 }
 
+// NewNetTransport instantiates a new network transport.
 func NewNetTransport() *NetTransport {
 	return &NetTransport{
 		local: make(localStore),
 		out:   make(map[string]*outConn),
 	}
-}
-
-func (t *NetTransport) getConn(host string) (*outConn, error) {
-	t.clock.RLock()
-	if v, ok := t.out[host]; ok {
-		defer t.clock.RUnlock()
-		return v, nil
-	}
-	t.clock.RUnlock()
-
-	conn, err := grpc.Dial(host, grpc.WithInsecure(), grpc.WithCodec(&chord.PayloadCodec{}))
-	if err != nil {
-		return nil, err
-	}
-
-	oc := &outConn{
-		host:   host,
-		conn:   conn,
-		client: netrpc.NewDifuseRPCClient(conn),
-	}
-
-	t.clock.Lock()
-	t.out[host] = oc
-	t.clock.Unlock()
-
-	return oc, nil
-
-}
-
-// reapConn closes and removes the conn from out mem pool.  This should be called
-// when connections go bad.
-func (t *NetTransport) reapConn(conn *outConn) {
-	conn.conn.Close()
-
-	t.clock.Lock()
-	if _, ok := t.out[conn.host]; ok {
-		delete(t.out, conn.host)
-	}
-	t.clock.Unlock()
 }
 
 // SetInode sets the given inode returning the leader for the inode and error
@@ -267,6 +228,7 @@ func (t *NetTransport) ReplicateTransactions(key, seek []byte, remote, local *ch
 	}
 
 	for {
+		// Receive tx starting from the seek point.
 		payload, e := stream.Recv()
 		if e != nil {
 			if e != io.EOF {
@@ -274,10 +236,10 @@ func (t *NetTransport) ReplicateTransactions(key, seek []byte, remote, local *ch
 			}
 			break
 		}
-
+		// Deserialize
 		fbtx := gentypes.GetRootAsTx(payload.Data, 0)
 		tx := deserializeTx(fbtx)
-
+		// Append tx to local vnode
 		if e := st.AppendTx(tx); e != nil {
 			err = e
 		}
@@ -358,7 +320,8 @@ func (t *NetTransport) LookupLeader(host string, key []byte) (*chord.Vnode, []*c
 	return vl[0], vl[1:], vm, nil
 }
 
-// TransferKeys replicates tx's for each key from the local to the remote vnode.
+// TransferKeys issues a transfer request of keys from the local to remote vnode.
+// This queues a per key replication process on the other end.
 func (t *NetTransport) TransferKeys(local, remote *chord.Vnode) error {
 	// Get local store
 	st, err := t.local.GetStore(local.Id)
@@ -413,7 +376,7 @@ func (t *NetTransport) TransferKeys(local, remote *chord.Vnode) error {
 	return err
 }
 
-// ReplicateBlocks starts cloning blocks from local vnode to remote vnode.
+// ReplicateBlocks starts replicating blocks from local vnode to remote vnode.
 func (t *NetTransport) ReplicateBlocks(local, remote *chord.Vnode) error {
 	// Get local store
 	st, err := t.local.GetStore(local.Id)
@@ -477,11 +440,12 @@ func (t *NetTransport) Register(cs ConsistentStore) {
 	t.cs = cs
 }
 
+// RegisterReplicationQ registers the replication channel to the transport.
 func (t *NetTransport) RegisterReplicationQ(rq chan<- *ReplRequest) {
 	t.replq = rq
 }
 
-// TransactionsServe serves transactions given the key and the seek position in the tx log for the key.
+// TransactionsServe serves transactions for given the key and the seek position in the tx log.
 func (t *NetTransport) TransactionsServe(in *chord.Payload, stream netrpc.DifuseRPC_TransactionsServeServer) error {
 	fbtxr := gentypes.GetRootAsTxRequest(in.Data, 0)
 	st, err := t.local.GetStore(fbtxr.IdBytes())
@@ -654,6 +618,8 @@ func (t *NetTransport) ReplicateBlocksServe(stream netrpc.DifuseRPC_ReplicateBlo
 	return stream.SendAndClose(&chord.Payload{})
 }
 
+// TransferKeysServe takes keys from the request and queues them to be replicated to the
+// specified destination vnode.
 func (t *NetTransport) TransferKeysServe(stream netrpc.DifuseRPC_TransferKeysServeServer) error {
 	// Receive from caller vnode where incoming blocks will be written to and merkle root
 	var req chord.Payload
@@ -669,31 +635,7 @@ func (t *NetTransport) TransferKeysServe(stream netrpc.DifuseRPC_TransferKeysSer
 	dst := tr.Dst(nil)
 	dv := &chord.Vnode{Id: dst.IdBytes(), Host: string(dst.Host())}
 
-	//if !isZeroHash(posh) {
-	//log.Printf("action=replicatetx vnode=%x root=%x", bs.IdBytes()[:8], mroot)
-	//}
-
-	/*// Get vnode store
-	st, err := t.local.GetStore(bs.IdBytes())
-	if err != nil {
-		return err
-	}*/
-
-	/*lmr, err := st.MerkleRootTx(nil)
-	if err != nil {
-		return err
-	}
-
-	// Vnode datastore is in-sync; so nothing to do; return
-	if txlog.EqualBytes(bs.RootBytes(), lmr) {
-		return stream.SendAndClose(&chord.Payload{})
-	}*/
-
-	// TODO:
-	// receive merkle root of each key
-	// respond with delta tx's
-
-	// Receive transactions from remote
+	// Receive replication requests
 	for {
 		payload, e := stream.Recv()
 		if e != nil {
@@ -712,4 +654,43 @@ func (t *NetTransport) TransferKeysServe(stream netrpc.DifuseRPC_TransferKeysSer
 	}
 
 	return stream.SendAndClose(&chord.Payload{})
+}
+
+func (t *NetTransport) getConn(host string) (*outConn, error) {
+	t.clock.RLock()
+	if v, ok := t.out[host]; ok {
+		defer t.clock.RUnlock()
+		return v, nil
+	}
+	t.clock.RUnlock()
+
+	conn, err := grpc.Dial(host, grpc.WithInsecure(), grpc.WithCodec(&chord.PayloadCodec{}))
+	if err != nil {
+		return nil, err
+	}
+
+	oc := &outConn{
+		host:   host,
+		conn:   conn,
+		client: netrpc.NewDifuseRPCClient(conn),
+	}
+
+	t.clock.Lock()
+	t.out[host] = oc
+	t.clock.Unlock()
+
+	return oc, nil
+
+}
+
+// reapConn closes and removes the conn from out mem pool.  This should be called
+// when connections go bad.
+func (t *NetTransport) reapConn(conn *outConn) {
+	conn.conn.Close()
+
+	t.clock.Lock()
+	if _, ok := t.out[conn.host]; ok {
+		delete(t.out, conn.host)
+	}
+	t.clock.Unlock()
 }

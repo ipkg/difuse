@@ -11,6 +11,32 @@ import (
 	"github.com/ipkg/difuse/txlog"
 )
 
+type InodeType byte
+
+func (i InodeType) String() string {
+	var s string
+	switch i {
+	case FileInodeType:
+		s = "file"
+	case DirInodeType:
+		s = "dir"
+	case KeyInodeType:
+		s = "key"
+	default:
+		s = "unknown"
+	}
+	return s
+}
+
+const (
+	// KeyInodeType is an node that represents a key
+	KeyInodeType InodeType = iota
+	// FileInodeType is an node that represents a filie
+	FileInodeType
+	// DirInodeType is an node that represents a directory
+	DirInodeType
+)
+
 // Inode represents a single unit of data around the ring.
 type Inode struct {
 	Id []byte
@@ -19,6 +45,8 @@ type Inode struct {
 	// Inline data indicates that the data in Blocks is the actual
 	// data rather than addresses to the data.
 	Inline bool
+	// Type of inode
+	Type InodeType
 	// This holds the address to physical data.  The address can be of any type
 	// i.e. hash, key, url etc..
 	Blocks [][]byte
@@ -32,6 +60,7 @@ type Inode struct {
 func NewInode(id []byte) *Inode {
 	return &Inode{
 		Id:     id,
+		Type:   FileInodeType,
 		Blocks: make([][]byte, 0),
 		txroot: txlog.ZeroHash(),
 	}
@@ -59,6 +88,7 @@ func (r *Inode) MarshalJSON() ([]byte, error) {
 		"size":   r.Size,
 		"key":    string(r.Id),
 		"inline": r.Inline,
+		"type":   r.Type.String(),
 		"txroot": fmt.Sprintf("%x", r.txroot),
 	}
 
@@ -76,6 +106,7 @@ func (r *Inode) Deserialize(ind *gentypes.Inode) {
 
 	r.Id = ind.IdBytes()
 	r.Size = ind.Size()
+	r.Type = InodeType(ind.Type())
 	r.Inline = (ind.Inline() == byte(1))
 	r.txroot = ind.RootBytes()
 
@@ -114,6 +145,7 @@ func (r *Inode) Serialize(fb *flatbuffers.Builder) flatbuffers.UOffsetT {
 	gentypes.InodeAddId(fb, kp)
 	gentypes.InodeAddBlocks(fb, bh)
 	gentypes.InodeAddSize(fb, r.Size)
+	gentypes.InodeAddType(fb, int8(r.Type))
 	gentypes.InodeAddRoot(fb, rp)
 	if r.Inline {
 		gentypes.InodeAddInline(fb, byte(1))

@@ -71,8 +71,20 @@ func (rcv *Inode) MutateInline(n byte) bool {
 	return rcv._tab.MutateByteSlot(8, n)
 }
 
-func (rcv *Inode) Root(j int) byte {
+func (rcv *Inode) Type() int8 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return rcv._tab.GetInt8(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Inode) MutateType(n int8) bool {
+	return rcv._tab.MutateInt8Slot(10, n)
+}
+
+func (rcv *Inode) Root(j int) byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
@@ -81,7 +93,7 @@ func (rcv *Inode) Root(j int) byte {
 }
 
 func (rcv *Inode) RootLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -89,7 +101,7 @@ func (rcv *Inode) RootLength() int {
 }
 
 func (rcv *Inode) RootBytes() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
@@ -97,7 +109,7 @@ func (rcv *Inode) RootBytes() []byte {
 }
 
 func (rcv *Inode) Blocks(obj *ByteSlice, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -112,7 +124,7 @@ func (rcv *Inode) Blocks(obj *ByteSlice, j int) bool {
 }
 
 func (rcv *Inode) BlocksLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -120,7 +132,7 @@ func (rcv *Inode) BlocksLength() int {
 }
 
 func InodeStart(builder *flatbuffers.Builder) {
-	builder.StartObject(5)
+	builder.StartObject(6)
 }
 func InodeAddId(builder *flatbuffers.Builder, Id flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(Id), 0)
@@ -134,14 +146,17 @@ func InodeAddSize(builder *flatbuffers.Builder, Size int64) {
 func InodeAddInline(builder *flatbuffers.Builder, Inline byte) {
 	builder.PrependByteSlot(2, Inline, 0)
 }
+func InodeAddType(builder *flatbuffers.Builder, Type int8) {
+	builder.PrependInt8Slot(3, Type, 0)
+}
 func InodeAddRoot(builder *flatbuffers.Builder, Root flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(Root), 0)
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(Root), 0)
 }
 func InodeStartRootVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
 func InodeAddBlocks(builder *flatbuffers.Builder, Blocks flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(Blocks), 0)
+	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(Blocks), 0)
 }
 func InodeStartBlocksVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)

@@ -25,11 +25,12 @@ func (nls localStore) GetStore(id []byte) (VnodeStore, error) {
 }
 
 func (nls localStore) ReplicateTransactions(key, seek []byte, src, dst *chord.Vnode) error {
+	// Source vnode
 	sstore, err := nls.GetStore(src.Id)
 	if err != nil {
 		return err
 	}
-
+	// Dest vnode
 	dstore, err := nls.GetStore(src.Id)
 	if err != nil {
 		return err

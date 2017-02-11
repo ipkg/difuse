@@ -72,6 +72,22 @@ func TestTxStoreMerkle(t *testing.T) {
 		t.Fatal("root hashes should not match")
 	}
 
+	ts, err := st1.Transactions([]byte("key10"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ts) == 0 {
+		t.Error("No transactions")
+	}
+
+	var cnt int
+	st2.Iter(func(k []byte, kt *KeyTransactions) error {
+		cnt++
+		return nil
+	})
+	if cnt == 0 {
+		t.Fatal("iter 0")
+	}
 	/*n := findLevel(&kmt1, &kmt2)
 	if n < 0 {
 		t.Fatal("not found")

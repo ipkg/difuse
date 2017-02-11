@@ -42,13 +42,11 @@ func NewMemTxStore() *MemTxStore {
 // with the key and slice of transactions as arguments.
 func (mts *MemTxStore) Iter(f func(k []byte, kt *KeyTransactions) error) error {
 	var err error
-
 	for k, v := range mts.m {
 		if e := f([]byte(k), v); e != nil {
 			err = e
 		}
 	}
-
 	return err
 }
 
@@ -83,6 +81,7 @@ func (mts *MemTxStore) MerkleRoot(key []byte) ([]byte, error) {
 	return nil, errNotFound
 }
 
+// Transactions returns all transactions for the key starting from the seek point.
 func (mts *MemTxStore) Transactions(key, seek []byte) (TxSlice, error) {
 	mts.mu.RLock()
 	defer mts.mu.RUnlock()
@@ -94,20 +93,6 @@ func (mts *MemTxStore) Transactions(key, seek []byte) (TxSlice, error) {
 
 	return v.Transactions(seek)
 }
-
-/*// First returns the first transaction for a key
-func (mts *MemTxStore) First(key []byte) (*Tx, error) {
-	mts.mu.RLock()
-	defer mts.mu.RUnlock()
-
-	if txs, ok := mts.m[string(key)]; ok {
-		if t := txs.First(); t != nil {
-			return t, nil
-		}
-	}
-
-	return nil, errNotFound
-}*/
 
 // Add adds a transaction to the transaction store.
 func (mts *MemTxStore) Add(tx *Tx) error {
@@ -179,10 +164,4 @@ func (mts *MemTxStore) storeMerkleRoot() ([]byte, error) {
 
 	tree := merkle.GenerateTree(mrs)
 	return tree.Root().Hash(), nil
-	/*mtree := merkle.NewTree()
-	if err := mtree.Generate(mrs, fastsha256.New()); err != nil {
-		return nil, err
-	}
-
-	return mtree.Root().Hash, nil*/
 }

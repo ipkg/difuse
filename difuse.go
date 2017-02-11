@@ -138,25 +138,22 @@ func NewDifuse(conf *Config, trans Transport) *Difuse {
 
 func (s *Difuse) startReplEngine() {
 
-	for rr := range s.replQ {
+	for req := range s.replQ {
 
-		st, err := s.transport.local.GetStore(rr.Dst.Id)
+		st, err := s.transport.local.GetStore(req.Dst.Id)
 		if err != nil {
 			log.Println("ERR", err)
 			continue
 		}
 
-		var hh []byte
-		ltx, err := st.LastTx(rr.Key)
+		var seek []byte
+		ltx, err := st.LastTx(req.Key)
 		if err == nil {
-			hh = ltx.Hash()
+			seek = ltx.Hash()
 		}
 
-		s.transport.ReplicateTransactions(rr.Key, hh, rr.Src, rr.Dst)
-		//if err = s.transport.ReplicateTransactions(rr.Key, hh, rr.Src, rr.Dst); err != nil {
-		//	log.Printf("ERR key='%s' msg='%v'", rr.Key, err)
-		//}
-
+		// error intentionally not caught, as it is inconsiquential
+		s.transport.ReplicateTransactions(req.Key, seek, req.Src, req.Dst)
 	}
 }
 
@@ -173,8 +170,6 @@ func (s *Difuse) Get(key []byte, options ...RequestOptions) ([]byte, *ResponseMe
 	if err != nil {
 		return nil, meta, err
 	}
-
-	log.Println(inode, meta, err)
 
 	out := make([]byte, 0, inode.Size)
 	for _, bh := range inode.Blocks {

@@ -1,6 +1,7 @@
 package difuse
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"reflect"
@@ -269,4 +270,36 @@ func TestNetTransportTx(t *testing.T) {
 	if !txlog.EqualBytes(mr1, mr2) {
 		t.Fatal("merkle mismatch")
 	}*/
+}
+
+func TestVnodeResponseMarshalJSON(t *testing.T) {
+	vr := []*VnodeResponse{
+		&VnodeResponse{Id: []byte("foo")},
+	}
+	b, _ := json.Marshal(vr)
+
+	var vr1 []*VnodeResponse
+	if err := json.Unmarshal(b, &vr1); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(vr1) != 1 {
+		t.Fatal("wrong length")
+	}
+	if vr1[0].Data != nil || vr1[0].Err != nil {
+		t.Fatal("should be nil")
+	}
+
+	vr2 := vr[0]
+	vr2.Data = map[string]string{}
+	vr2.Err = fmt.Errorf("foo")
+
+	b, _ = json.Marshal(vr2)
+
+	var vr3 VnodeResponse
+	json.Unmarshal(b, &vr3)
+
+	if vr3.Data == nil {
+		t.Fatal("should have data")
+	}
 }
