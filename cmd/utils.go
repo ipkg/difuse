@@ -17,7 +17,7 @@ func version() string {
 	return fmt.Sprintf("%s %s/%s/%s", difuse.VERSION, commit, branch, buildtime)
 }
 
-func printBanner() {
+func printBanner(cfg *difuse.Config) {
 	fmt.Println("difuse", version())
 	fmt.Printf(`
   Bind       : %s
@@ -30,8 +30,8 @@ func printBanner() {
 `, cfg.BindAddr, cfg.AdvAddr, cfg.Chord.NumSuccessors, cfg.Chord.NumVnodes, *adminAddr)
 }
 
-func initNet() (net.Listener, *grpc.Server) {
-	ln, err := net.Listen("tcp", cfg.BindAddr)
+func initNet(addr string) (net.Listener, *grpc.Server) {
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -1,6 +1,7 @@
 # difuse [![Build Status](https://travis-ci.org/ipkg/difuse.svg?branch=master)](https://travis-ci.org/ipkg/difuse)
 
-difuse is a new breed of truly distributed datastores.  
+difuse is a new breed of truly distributed datastores.  It uses gRPC and flatbuffers for
+serialization.
 
 Current distributed systems follow a leader/follower model and rely on a fixed leader
 for consensus. This eventually limits the scalability of the cluster.  difuse contains

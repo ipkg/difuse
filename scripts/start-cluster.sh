@@ -30,6 +30,9 @@ for i in `seq 1 ${COUNT}`; do
     echo "Press any key to start the next node"
     read cin
 
+    echo "[Starting node: ${i}]"
+    echo ""
+
     b=`expr ${bstart} \+ ${i}`
     a=`expr ${astart} \+ ${i}`
 
