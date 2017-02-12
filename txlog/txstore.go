@@ -114,6 +114,9 @@ func (mts *MemTxStore) Add(tx *Tx) error {
 
 // Get geta a transaction for a given key and associated hash
 func (mts *MemTxStore) Get(key []byte, txhash []byte) (*Tx, error) {
+	mts.mu.RLock()
+	defer mts.mu.RUnlock()
+
 	if txs, ok := mts.m[string(key)]; ok {
 		for _, tx := range txs.txs {
 			if EqualBytes(tx.Hash(), txhash) {
