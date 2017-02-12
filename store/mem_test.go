@@ -34,7 +34,7 @@ func TestStore(t *testing.T) {
 
 	//dt := dst.TxLog
 	ntx, _ := dst.NewTx([]byte("key"))
-	rk := NewInodeFromData([]byte("key"), []byte("value"))
+	rk := NewKeyInodeWithValue([]byte("key"), []byte("value"))
 	fb := flatbuffers.NewBuilder(0)
 	ofs := rk.Serialize(fb)
 	fb.Finish(ofs)
@@ -76,7 +76,7 @@ func TestStore(t *testing.T) {
 		t.Fatal("double set failed")
 	}
 
-	blk, err := dst.GetBlock(val.Blocks[0])
+	blk, err := dst.GetBlock(bsh1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,10 +85,10 @@ func TestStore(t *testing.T) {
 	vsh := sha256.Sum256(blk)
 
 	if !reflect.DeepEqual(csh[:], vsh[:]) {
-		t.Fatal("hash mismatch")
+		t.Fatalf("hash mismatch %x %x", csh[:], vsh[:])
 	}
 
-	if !reflect.DeepEqual(csh[:], val.Blocks[0]) {
+	if !reflect.DeepEqual(csh[:], bsh2) {
 		t.Fatalf("hash mismatch")
 	}
 
@@ -131,7 +131,7 @@ func TestStore(t *testing.T) {
 }
 
 func TestInode(t *testing.T) {
-	inode := NewInodeFromData([]byte("key"), []byte("data"))
+	inode := NewKeyInodeWithValue([]byte("key"), []byte("data"))
 	if _, err := json.Marshal(inode); err != nil {
 		t.Fatal(err)
 	}

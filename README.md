@@ -3,6 +3,8 @@
 difuse is a new breed of truly distributed datastores.  It uses gRPC and flatbuffers for
 serialization.
 
+**difuse under heavy development and is not yet production ready.**
+
 Current distributed systems follow a leader/follower model and rely on a fixed leader
 for consensus. This eventually limits the scalability of the cluster.  difuse contains
 multiple leaders through out the cluster.  All nodes perform the same function and are
@@ -45,15 +47,55 @@ or [http://localhost:9091](http://localhost:9091)
 
 - **v1.0**
 
-    - [ ] Persistent Storage
+    - [ ] Persistent Storage (TBD)
     - [ ] Stability
     - [ ] User defined consistency levels.
+        - [ ] Stat
+            - [ ] All
+            - [x] Leader
+            - [ ] Quorum
+            - [x] Lazy
+        - [ ] SetInode
+            - [x] All
+            - [x] Leader
+            - [ ] Quorum
+        - [ ] DeleteInode
+            - [x] All
+            - [x] Leader
+            - [ ] Quorum
+        - [ ] DeleteBlock
+            - [x] All
+            - [ ] Leader
+            - [ ] Quorum
+            - [ ] Lazy
+        - [ ] GetBlock
+            - [ ] All
+            - [ ] Leader
+            - [ ] Quorum
+            - [x] Lazy
+        - [ ] SetBlock
+            - [x] All
+            - [ ] Leader
+            - [ ] Quorum
+            - [ ] Lazy   
+    - [ ] Replication/Healing
+            - [x] Node join replication
+            - [ ] Transaction log stagnant drift
+    - [ ] Multi-addressable data
+        - [x] Content-Addressable
+        - [x] Key-Value
+        - [ ] File based
+        - [ ] Hierarchical
     - [ ] Jepsen tests
+
+- **v1.0+**
+
+    - [ ] Compaction
 
 ## Design
 This portion outlines the internal architecture and design of difuse.
 
-difuse uses a Distributed Hash Table to perform much of it's work.  
+difuse uses a Chord - a Distributed Hash Table to perform much of it's work.  
 
 ### Writes
 Difuse has 2 types of writes:
@@ -73,5 +115,5 @@ a key and the hash of the previous transaction.  A transaction is processed as f
 
 - Query ring for N successors for K where N is an odd number and K is the key.
 - Compute leader vnode for K
-- If node does not own the vnode, error out.
+- If node does not own the vnode, forward/error out.
 - If node owns the vnode, create a new transaction and submit it based on the specified consistency level.

@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/btcsuite/fastsha256"
 	flatbuffers "github.com/google/flatbuffers/go"
 
 	"github.com/ipkg/difuse/gentypes"
 	"github.com/ipkg/difuse/txlog"
 )
 
+// InodeType holds the type of inode.
 type InodeType byte
 
 func (i InodeType) String() string {
@@ -42,9 +42,6 @@ type Inode struct {
 	Id []byte
 	// total size of the data
 	Size int64
-	// Inline data indicates that the data in Blocks is the actual
-	// data rather than addresses to the data.
-	Inline bool
 	// Type of inode
 	Type InodeType
 	// This holds the address to physical data.  The address can be of any type
@@ -57,7 +54,7 @@ type Inode struct {
 
 // NewInode instantiates a new inode with the given id.  This is an empty inode with
 // no data.
-func NewInode(id []byte) *Inode {
+/*func NewInode(id []byte) *Inode {
 	return &Inode{
 		Id:     id,
 		Type:   FileInodeType,
@@ -75,6 +72,15 @@ func NewInodeFromData(key, data []byte) *Inode {
 	sh := fastsha256.Sum256(data)
 	rk.Blocks = [][]byte{sh[:]}
 	return rk
+}*/
+func NewKeyInodeWithValue(key, value []byte) *Inode {
+	return &Inode{
+		Id:     key,
+		Type:   KeyInodeType,
+		Blocks: [][]byte{value},
+		Size:   int64(len(value)),
+		txroot: txlog.ZeroHash(),
+	}
 }
 
 // TxRoot returns the merkle root of all transactions performed on this vnode.
@@ -87,16 +93,19 @@ func (r *Inode) MarshalJSON() ([]byte, error) {
 	m := map[string]interface{}{
 		"size":   r.Size,
 		"key":    string(r.Id),
-		"inline": r.Inline,
 		"type":   r.Type.String(),
 		"txroot": fmt.Sprintf("%x", r.txroot),
 	}
 
-	bhs := make([]string, len(r.Blocks))
-	for i, v := range r.Blocks {
-		bhs[i] = fmt.Sprintf("%x", v)
+	if r.Type == FileInodeType {
+		bhs := make([]string, len(r.Blocks))
+		for i, v := range r.Blocks {
+			bhs[i] = fmt.Sprintf("%x", v)
+		}
+		m["blocks"] = bhs
+	} else {
+		m["blocks"] = r.Blocks
 	}
-	m["blocks"] = bhs
 
 	return json.Marshal(m)
 }
@@ -107,7 +116,6 @@ func (r *Inode) Deserialize(ind *gentypes.Inode) {
 	r.Id = ind.IdBytes()
 	r.Size = ind.Size()
 	r.Type = InodeType(ind.Type())
-	r.Inline = (ind.Inline() == byte(1))
 	r.txroot = ind.RootBytes()
 
 	l := ind.BlocksLength()
@@ -147,8 +155,5 @@ func (r *Inode) Serialize(fb *flatbuffers.Builder) flatbuffers.UOffsetT {
 	gentypes.InodeAddSize(fb, r.Size)
 	gentypes.InodeAddType(fb, int8(r.Type))
 	gentypes.InodeAddRoot(fb, rp)
-	if r.Inline {
-		gentypes.InodeAddInline(fb, byte(1))
-	}
 	return gentypes.InodeEnd(fb)
 }

@@ -80,8 +80,8 @@ func (s *Difuse) keyleader(key []byte, vs []*chord.Vnode) (lvn *chord.Vnode, vm 
 }
 
 // appendTx appends a transaction to the log based on the consistency.  If this node is not the leader
-// for the key the leader vnode and a not leader error is returned otherwise just the leader vnode
-// is returned.
+// for the key, the leader vnode and error are returned otherwise just the leader vnode. This always
+// processes leader first then remainder based on consistency
 func (s *Difuse) appendTx(txtype byte, key, data []byte, opts *RequestOptions) (*chord.Vnode, error) {
 
 	l, _, vm, err := s.LookupLeader(key)
@@ -94,37 +94,37 @@ func (s *Difuse) appendTx(txtype byte, key, data []byte, opts *RequestOptions) (
 		return l, ErrNotLeader
 	}
 
+	// Get new tx from leader
+	rsp, err := s.transport.NewTx(key, l)
+	if err != nil {
+		return l, err
+	} else if rsp[0].Err != nil {
+		return l, rsp[0].Err
+	}
+
+	tx, _ := rsp[0].Data.(*txlog.Tx)
+	//if !ok {
+	//	return l, fmt.Errorf(errInvalidDataType, tx)
+	//}
+	tx.Data = append([]byte{txtype}, data...)
+	if err = tx.Sign(s.signator); err != nil {
+		return l, err
+	}
+
+	// Append the new tx
+	vns := vm[l.Host]
+	resp, err := s.transport.AppendTx(tx, opts, vns...)
+	if err != nil {
+		return l, err
+	}
+	if resp[0].Err != nil {
+		return l, resp[0].Err
+	}
+
+	delete(vm, l.Host)
+
 	switch opts.Consistency {
 	case ConsistencyLeader:
-
-		// Get new tx from leader
-		rsp, err := s.transport.NewTx(key, l)
-		if err != nil {
-			return l, err
-		}
-		if rsp[0].Err != nil {
-			return l, rsp[0].Err
-		}
-		tx, ok := rsp[0].Data.(*txlog.Tx)
-		if !ok {
-			return l, fmt.Errorf(errInvalidDataType, tx)
-		}
-
-		tx.Data = append([]byte{txtype}, data...)
-		if err = tx.Sign(s.signator); err != nil {
-			return l, err
-		}
-		// Append the new tx
-		vns := vm[l.Host]
-		resp, err := s.transport.AppendTx(tx, opts, vns...)
-		if err != nil {
-			return l, err
-		}
-		if resp[0].Err != nil {
-			return l, resp[0].Err
-		}
-
-		delete(vm, l.Host)
 
 		go func(vmap map[string][]*chord.Vnode, ktx *txlog.Tx, options RequestOptions) {
 
@@ -147,6 +147,23 @@ func (s *Difuse) appendTx(txtype byte, key, data []byte, opts *RequestOptions) (
 		}(vm, tx, *opts)
 
 		return l, nil
+
+	case ConsistencyAll:
+		for _, vns := range vm {
+
+			resp, e := s.transport.AppendTx(tx, opts, vns...)
+			if e != nil {
+				err = e
+				continue
+			}
+			for _, r := range resp {
+				if r.Err != nil {
+					err = r.Err
+				}
+			}
+
+		}
+		return l, err
 	}
 
 	return nil, fmt.Errorf(errInvalidConsistencyLevel, opts.Consistency)

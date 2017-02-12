@@ -118,7 +118,7 @@ func TestDifuseSetStat(t *testing.T) {
 
 	testkey := []byte("testkey")
 	testval := []byte("testvalue")
-	testInode := store.NewInodeFromData(testkey, testval)
+	testInode := store.NewKeyInodeWithValue(testkey, testval)
 
 	if _, err = s1.SetInode(testInode, nil); err != nil {
 		t.Fatal(err)
@@ -147,7 +147,8 @@ func TestDifuseSetStat(t *testing.T) {
 		t.Error(err)
 	}
 
-	if _, err = s2.SetBlock([]byte("testdata")); err != nil {
+	shash, err := s2.SetBlock([]byte("testdata"))
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -176,4 +177,9 @@ func TestDifuseSetStat(t *testing.T) {
 	/*if _, _, err = s1.LastTx(testkey); err != nil {
 		t.Fatal(err)
 	}*/
+
+	if err = s1.DeleteBlock(shash); err != nil {
+		t.Fatal(err)
+	}
+
 }

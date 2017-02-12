@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 
 	"github.com/btcsuite/fastsha256"
 	flatbuffers "github.com/google/flatbuffers/go"
@@ -136,27 +135,6 @@ func NewDifuse(conf *Config, trans Transport) *Difuse {
 	return slt
 }
 
-func (s *Difuse) startReplEngine() {
-
-	for req := range s.replQ {
-
-		st, err := s.transport.local.GetStore(req.Dst.Id)
-		if err != nil {
-			log.Println("ERR", err)
-			continue
-		}
-
-		var seek []byte
-		ltx, err := st.LastTx(req.Key)
-		if err == nil {
-			seek = ltx.Hash()
-		}
-
-		// error intentionally not caught, as it is inconsiquential
-		s.transport.ReplicateTransactions(req.Key, seek, req.Src, req.Dst)
-	}
-}
-
 // RegisterRing registers the chord ring to the difuse instance.
 func (s *Difuse) RegisterRing(ring *chord.Ring) {
 	s.ring = ring
@@ -170,8 +148,8 @@ func (s *Difuse) Get(key []byte, options ...RequestOptions) ([]byte, *ResponseMe
 	if err != nil {
 		return nil, meta, err
 	}
-
-	out := make([]byte, 0, inode.Size)
+	return inode.Blocks[0], meta, nil
+	/*out := make([]byte, 0, inode.Size)
 	for _, bh := range inode.Blocks {
 
 		bd, err := s.GetBlock(bh, options...)
@@ -181,7 +159,7 @@ func (s *Difuse) Get(key []byte, options ...RequestOptions) ([]byte, *ResponseMe
 
 		out = append(out, bd...)
 	}
-	return out, meta, nil
+	return out, meta, nil*/
 }
 
 // Delete deletes an inode associated to the given key based on provided options. Returns
@@ -205,16 +183,20 @@ func (s *Difuse) Delete(key []byte, options ...RequestOptions) (*store.Inode, *R
 // Set sets a key to the given value.  It first sets the underlying block data then
 // sets the inode.  Returns the leader vnode and error
 func (s *Difuse) Set(key, value []byte, options ...RequestOptions) (*ResponseMeta, error) {
-	hsh, err := s.SetBlock(value, options...)
+	/*hsh, err := s.SetBlock(value, options...)
 	if err != nil {
 		return nil, err
-	}
+	}*/
+	inode := store.NewKeyInodeWithValue(key, value)
 
-	inode := store.NewInode(key)
+	/*inode := store.NewInode(key)
 	inode.Size = int64(len(value))
-	inode.Blocks = [][]byte{hsh}
+	inode.Blocks = [][]byte{hsh}*/
 
-	rmeta := &ResponseMeta{}
+	var (
+		rmeta = &ResponseMeta{}
+		err   error
+	)
 	if len(options) > 0 {
 		rmeta.Vnode, err = s.SetInode(inode, &options[0])
 	} else {
@@ -239,7 +221,7 @@ func (s *Difuse) DeleteInode(inode *store.Inode, options *RequestOptions) (*chor
 
 	lvn, err := s.appendTx(store.TxTypeDelete, inode.Id, fb.Bytes[fb.Head():], opts)
 	if err == ErrNotLeader {
-		// TODO: Redirect to leader
+		// Redirect to leader
 		return s.transport.DeleteInode(lvn.Host, inode, opts)
 	}
 
@@ -261,7 +243,7 @@ func (s *Difuse) SetInode(inode *store.Inode, options *RequestOptions) (*chord.V
 
 	lvn, err := s.appendTx(store.TxTypeSet, inode.Id, fb.Bytes[fb.Head():], opts)
 	if err == ErrNotLeader {
-		// TODO: Redirect to leader
+		//  Redirect to leader
 		return s.transport.SetInode(lvn.Host, inode, opts)
 	}
 
@@ -439,7 +421,38 @@ func (s *Difuse) SetBlock(data []byte, options ...RequestOptions) ([]byte, error
 
 // DeleteBlock deletes the block from all vnodes based on the specified consistency.
 func (s *Difuse) DeleteBlock(hash []byte, options ...RequestOptions) error {
-	return fmt.Errorf("TBI")
+	var opts *RequestOptions
+	if len(options) > 0 {
+		opts = &options[0]
+	} else {
+		opts = &RequestOptions{Consistency: ConsistencyAll}
+	}
+
+	switch opts.Consistency {
+	case ConsistencyAll:
+
+		vns, err := s.ring.Lookup(s.config.Chord.NumSuccessors, hash)
+		if err != nil {
+			return err
+		}
+		vm := vnodesByHost(vns)
+
+		for _, vl := range vm {
+			resp, er := s.transport.DeleteBlock(hash, opts, vl...)
+			if er != nil {
+				return err
+			}
+			// check all responses
+			for _, v := range resp {
+				if v.Err != nil {
+					return v.Err
+				}
+			}
+		}
+		return nil
+	}
+
+	return fmt.Errorf(errInvalidConsistencyLevel, opts.Consistency)
 }
 
 // LookupLeader does a lookup on the key and returns the leader for the key, vnodes

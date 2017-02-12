@@ -151,7 +151,7 @@ func TestNetTransportTx(t *testing.T) {
 	nt1.RegisterVnode(vn2, st2)
 	nt1.RegisterVnode(vn3, st3)
 
-	inode1 := store.NewInodeFromData([]byte("key"), []byte("foobar"))
+	inode1 := store.NewKeyInodeWithValue([]byte("key"), []byte("foobar"))
 	fb := flatbuffers.NewBuilder(0)
 	ofs := inode1.Serialize(fb)
 	fb.Finish(ofs)
@@ -215,9 +215,6 @@ func TestNetTransportTx(t *testing.T) {
 			inode := r.Data.(*store.Inode)
 			if string(inode.Id) != "key" {
 				t.Error("key mismatch")
-			}
-			if inode.Inline {
-				t.Error("should not be inline")
 			}
 			if len(inode.Blocks) < 1 {
 				t.Error("no blocks")
