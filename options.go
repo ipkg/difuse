@@ -12,7 +12,7 @@ const (
 	ConsistencyQuorum
 	// ConsistencyAll ensures consistency on all nodes
 	ConsistencyAll
-	// ConsistencyLazy picks the first available node
+	// ConsistencyLazy picks the first available node preferring local first.
 	ConsistencyLazy
 )
 

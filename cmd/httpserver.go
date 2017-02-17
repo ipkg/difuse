@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -16,10 +17,68 @@ import (
 const (
 	headerResponseTime = "Response-Time"
 	headerVnode        = "Vnode"
+	headerKeyHash      = "Key-Hash"
 )
 
 type httpServer struct {
 	tt *difuse.Difuse
+}
+
+func (hs *httpServer) handleBlockData(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+	var (
+		err  error
+		ct   = newCallTimer()
+		data interface{}
+		//meta  *difuse.ResponseMeta
+		rtime float64
+		opts  = parseOptions(r)
+	)
+
+	switch r.Method {
+	case "GET":
+		key, er := hex.DecodeString(r.URL.Path[1:])
+		if er != nil {
+			return nil, er
+		}
+		if opts == nil {
+			ct.start()
+			data, err = hs.tt.GetBlock(key)
+		} else {
+			ct.start()
+			data, err = hs.tt.GetBlock(key, *opts)
+		}
+		rtime = ct.stop()
+
+	case "POST":
+		var b []byte
+		if b, err = ioutil.ReadAll(r.Body); err == nil {
+			r.Body.Close()
+
+			if opts == nil {
+				ct.start()
+				var d []byte
+				if d, err = hs.tt.SetBlock(b); err == nil {
+					data = []byte(hex.EncodeToString(d))
+				}
+			} else {
+				ct.start()
+				var d []byte
+				if d, err = hs.tt.SetBlock(b, *opts); err == nil {
+					data = []byte(hex.EncodeToString(d))
+				}
+			}
+			rtime = ct.stop()
+		}
+
+	default:
+		return nil, fmt.Errorf("Method not allowed")
+
+	}
+
+	w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", rtime))
+	//w.Header().Set(headerVnode, difuse.ShortVnodeID(meta.Vnode))
+
+	return data, err
 }
 
 func (hs *httpServer) handleData(w http.ResponseWriter, r *http.Request) (interface{}, error) {
@@ -78,26 +137,37 @@ func (hs *httpServer) handleLocate(w http.ResponseWriter, r *http.Request) (inte
 		data  interface{}
 		err   error
 		etime float64
+		khash []byte
 	)
 
 	switch {
 	case strings.HasPrefix(spath, "tx/last/"):
 		key := strings.TrimPrefix(spath, "tx/last/")
 		ct.start()
-		data, err = hs.tt.LocateLastTx([]byte(key))
+		khash, data, err = hs.tt.LocateLastTx([]byte(key))
 		etime = ct.stop()
 
 	case strings.HasPrefix(spath, "inode/"):
 		key := strings.TrimPrefix(spath, "inode/")
 		ct.start()
-		data, err = hs.tt.LocateInode([]byte(key))
+		khash, data, err = hs.tt.LocateInode([]byte(key))
+		etime = ct.stop()
+
+	case strings.HasPrefix(spath, "block/"):
+		keystr := strings.TrimPrefix(spath, "block/")
+
+		ct.start()
+		var key []byte
+		if key, err = hex.DecodeString(keystr); err == nil {
+			khash, data, err = hs.tt.LocateBlock([]byte(key))
+		}
 		etime = ct.stop()
 
 	default:
 		return nil, fmt.Errorf("not found")
 
 	}
-
+	w.Header().Set(headerKeyHash, fmt.Sprintf("%x", khash))
 	w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", etime))
 	return data, err
 }
@@ -116,6 +186,17 @@ func (hs *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	switch {
+	case strings.HasPrefix(upath, "repair/"):
+		kstr := strings.TrimPrefix(upath, "repair/")
+		ct.start()
+		data, err = hs.tt.RepairLocalVnodes([]byte(kstr))
+		etime = ct.stop()
+
+		w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", etime))
+
+	case strings.HasPrefix(upath, "block"):
+		data, err = hs.handleBlockData(w, r)
+
 	case strings.HasPrefix(upath, "stat/"):
 		kstr := strings.TrimPrefix(upath, "stat/")
 

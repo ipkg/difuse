@@ -2,7 +2,6 @@ package difuse
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 
 	"github.com/ipkg/difuse/store"
@@ -110,7 +109,14 @@ func (lt *localTransport) AppendTx(tx *txlog.Tx, options *RequestOptions, vl ...
 	return lt.remote.AppendTx(tx, options, vl...)
 }
 
-// ReplicateTransactions replicates transactions from remote to local.  If remote is a local vnode then
+func (lt *localTransport) ProposeTx(tx *txlog.Tx, options *RequestOptions, vl ...*chord.Vnode) ([]*VnodeResponse, error) {
+	if vl[0].Host == lt.host {
+		return lt.local.ProposeTx(tx, options, vl...)
+	}
+	return lt.remote.ProposeTx(tx, options, vl...)
+}
+
+/*// ReplicateTransactions replicates transactions from remote to local.  If remote is a local vnode then
 // then replication is assumed to be among two local vnodes.
 func (lt *localTransport) ReplicateTransactions(key, seek []byte, src, dst *chord.Vnode) error {
 	if src.Host != lt.host && dst.Host != lt.host {
@@ -122,6 +128,13 @@ func (lt *localTransport) ReplicateTransactions(key, seek []byte, src, dst *chor
 	} else {
 		return lt.remote.ReplicateTransactions(key, seek, dst, src)
 	}
+}*/
+
+func (lt *localTransport) Transactions(key, seek []byte, vl ...*chord.Vnode) (txlog.TxSlice, error) {
+	if vl[0].Host == lt.host {
+		return lt.local.Transactions(key, seek, vl...)
+	}
+	return lt.remote.Transactions(key, seek, vl...)
 }
 
 func (lt *localTransport) GetTx(key, txhash []byte, options *RequestOptions, vl ...*chord.Vnode) ([]*VnodeResponse, error) {

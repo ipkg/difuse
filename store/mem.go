@@ -28,16 +28,37 @@ type MemLoggedStore struct {
 }
 
 // NewMemLoggedStore instantiates a new tx log back in memory store.
-func NewMemLoggedStore(vn *chord.Vnode, kp txlog.Signator) *MemLoggedStore {
+func NewMemLoggedStore(vn *chord.Vnode, kp txlog.Signator, trans txlog.Transport) *MemLoggedStore {
 	mls := &MemLoggedStore{
 		MemDataStore: NewMemDataStore(vn),
 		txstore:      txlog.NewMemTxStore(),
 	}
 
-	mls.txl = txlog.NewTxLog(kp, mls.txstore, mls)
+	mls.txl = txlog.NewTxLog(kp, mls.txstore, trans, mls)
 	go mls.txl.Start()
 
 	return mls
+}
+
+func (mem *MemLoggedStore) TxLog() *txlog.TxLog {
+	return mem.txl
+}
+
+/*func NewMemLoggedStoreWithTxLog(dstore *MemDataStore, txstore txlog.TxStore, txl *txlog.TxLog) *MemLoggedStore {
+	mls := &MemLoggedStore{
+		MemDataStore: dstore,
+		txstore:      txstore,
+	}
+
+	mls.txl = txl
+	go mls.txl.Start()
+
+	return mls
+}*/
+
+// Vnode returns the vnode this store is attached to.
+func (mem *MemLoggedStore) Vnode() *chord.Vnode {
+	return mem.vn
 }
 
 // Apply a given transaction to the stable store
@@ -119,6 +140,10 @@ func (mem *MemLoggedStore) AppendTx(tx *txlog.Tx) error {
 	return mem.txl.AppendTx(tx)
 }
 
+func (mem *MemLoggedStore) ProposeTx(tx *txlog.Tx) error {
+	return mem.txl.ProposeTx(tx)
+}
+
 // NewTx creates a new transaction based on the previous hash from the log
 func (mem *MemLoggedStore) NewTx(key []byte) (*txlog.Tx, error) {
 	return mem.txl.NewTx(key)
@@ -132,7 +157,7 @@ func (mem *MemLoggedStore) LastTx(key []byte) (*txlog.Tx, error) {
 // MemDataStore is an in-memory datastore
 type MemDataStore struct {
 	// transactional store state
-	tlock sync.Mutex
+	tlock sync.RWMutex
 	txm   map[string]*Inode
 
 	// content addressable store
@@ -153,6 +178,10 @@ func NewMemDataStore(vn *chord.Vnode) *MemDataStore {
 // IterInodes iterates over all the inodes
 func (ms *MemDataStore) IterInodes(f func([]byte, *Inode) error) error {
 	var err error
+
+	ms.tlock.RLock()
+	defer ms.tlock.RUnlock()
+
 	for k, v := range ms.txm {
 		if e := f([]byte(k), v); e != nil {
 			err = e
@@ -177,8 +206,8 @@ func (ms *MemDataStore) Stat(key []byte) (*Inode, error) {
 func (ms *MemDataStore) IterBlocks(f func(k, v []byte) error) error {
 	var e error
 
-	ms.clock.Lock()
-	defer ms.clock.Unlock()
+	ms.clock.RLock()
+	defer ms.clock.RUnlock()
 
 	for k, v := range ms.cad {
 		kb, err := hex.DecodeString(k)
@@ -192,6 +221,20 @@ func (ms *MemDataStore) IterBlocks(f func(k, v []byte) error) error {
 		}
 	}
 	return e
+}
+
+func (ms *MemDataStore) InodeCount() int64 {
+	ms.tlock.RLock()
+	defer ms.tlock.RUnlock()
+
+	return int64(len(ms.txm))
+}
+
+func (ms *MemDataStore) BlockCount() int64 {
+	ms.clock.RLock()
+	defer ms.clock.RUnlock()
+
+	return int64(len(ms.cad))
 }
 
 // GetBlock gets a block by it's content hash signified by key

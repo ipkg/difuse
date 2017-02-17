@@ -2,6 +2,7 @@ package difuse
 
 import (
 	"fmt"
+	"log"
 	"reflect"
 	"testing"
 	"time"
@@ -46,7 +47,7 @@ func prepDifuse(p int, j ...string) (*Difuse, error) {
 	return sault1, err
 }
 
-func TestDifuseLookupLeader(t *testing.T) {
+/*func TestDifuseLookupLeader(t *testing.T) {
 	s1, err := prepDifuse(12345)
 	if err != nil {
 		t.Fatal(err)
@@ -99,9 +100,11 @@ func TestDifuseLookupLeader(t *testing.T) {
 		t.Error("leader not in map")
 	}
 
-}
+}*/
 
-func TestDifuseSetStat(t *testing.T) {
+func TestDifuseInodeSetStat(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	s1, err := prepDifuse(23456)
 	if err != nil {
 		t.Fatal(err)
@@ -123,6 +126,8 @@ func TestDifuseSetStat(t *testing.T) {
 	if _, err = s1.SetInode(testInode, nil); err != nil {
 		t.Fatal(err)
 	}
+
+	<-time.After(1000 * time.Millisecond)
 
 	ind1, _, err := s1.Stat(testkey)
 	if err != nil {
@@ -147,10 +152,10 @@ func TestDifuseSetStat(t *testing.T) {
 		t.Error(err)
 	}
 
-	shash, err := s2.SetBlock([]byte("testdata"))
+	/*shash, err := s2.SetBlock([]byte("testdata"))
 	if err != nil {
 		t.Fatal(err)
-	}
+	}*/
 
 	if _, err = s2.Set(testkey, testval); err != nil {
 		t.Fatal(err)
@@ -169,7 +174,7 @@ func TestDifuseSetStat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//<-time.After(1 * time.Second)
+	<-time.After(1 * time.Second)
 	if _, _, err = s1.Delete(testkey); err == nil {
 		t.Fatal("should fail")
 	}
@@ -178,8 +183,45 @@ func TestDifuseSetStat(t *testing.T) {
 		t.Fatal(err)
 	}*/
 
-	if err = s1.DeleteBlock(shash); err != nil {
+	/*if err = s1.DeleteBlock(shash); err != nil {
+		t.Fatal(err)
+	}*/
+
+	/*if err = s1.createParentPath([]byte("/foo/bar/baz"), []byte("film")); err != nil {
 		t.Fatal(err)
 	}
+
+	if err = s1.createParentPath([]byte("/foo/bar"), []byte("film")); err != nil {
+		t.Fatal(err)
+	}
+
+	<-time.After(1 * time.Second)
+
+	pchk, _, err := s2.Stat([]byte("/foo/bar/baz"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(pchk.Blocks[0]) != "film" {
+		t.Fatal("wrong child")
+	}
+
+	pchk, _, err = s1.Stat([]byte("/"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(pchk.Blocks[0]) != "foo" {
+		t.Fatal("wrong child")
+	}
+
+	pchk, _, err = s1.Stat([]byte("/foo/bar"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pchk.ContainsBlock([]byte("film")) {
+		t.Error("should have key")
+	}
+	if !pchk.ContainsBlock([]byte("baz")) {
+		t.Error("should have key")
+	}*/
 
 }

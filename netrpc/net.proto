@@ -7,6 +7,7 @@ import "github.com/ipkg/go-chord/net.proto";
 service DifuseRPC {
     rpc GetTxServe(chord.Payload) returns (chord.Payload) {}
     rpc AppendTxServe(chord.Payload) returns (chord.Payload) {}
+    rpc ProposeTxServe(chord.Payload) returns (chord.Payload) {}
     rpc LastTxServe(chord.Payload) returns (chord.Payload) {}
     rpc MerkleRootTxServe(chord.Payload) returns (chord.Payload) {}
     // Transaction slice of a key from a given seek point
@@ -22,7 +23,7 @@ service DifuseRPC {
 
     rpc ReplicateBlocksServe(stream chord.Payload)returns (chord.Payload) {}
     // Transfer keys from local to remote vnode.
-    rpc TransferKeysServe(chord.Payload)returns (stream chord.Payload) {}
+    rpc TransferKeysServe(stream chord.Payload)returns (chord.Payload) {}
 
     rpc LookupLeaderServe(chord.Payload)returns (chord.Payload) {}
 }

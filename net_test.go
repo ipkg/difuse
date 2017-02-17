@@ -18,6 +18,20 @@ import (
 	"github.com/ipkg/difuse/txlog"
 )
 
+type testBroadcast struct {
+	tl *txlog.TxLog
+}
+
+func (tb *testBroadcast) BroadcastTx(tx *txlog.Tx, vn *chord.Vnode) error {
+	var err error
+	for i := 0; i < 3; i++ {
+		if er := tb.tl.AppendTx(tx); er != nil {
+			err = er
+		}
+	}
+	return err
+}
+
 func newGRPCServer(p int) (net.Listener, *grpc.Server, error) {
 	addr := fmt.Sprintf("127.0.0.1:%d", p)
 	ln, err := net.Listen("tcp", addr)
@@ -43,7 +57,7 @@ func prepGRPCTransport(p int) (net.Listener, *grpc.Server, *NetTransport, error)
 	go func() {
 		<-ch
 	}()
-	nt.RegisterReplicationQ(ch)
+	nt.RegisterTransferQ(ch)
 
 	return ln, server, nt, nil
 }
@@ -62,9 +76,9 @@ func TestNetTransportBlock(t *testing.T) {
 	vn2 := &chord.Vnode{Id: []byte("vnode-32325-2"), Host: "127.0.0.1:32325"}
 	vn3 := &chord.Vnode{Id: []byte("vnode-32325-3"), Host: "127.0.0.1:32325"}
 
-	st1 := store.NewMemLoggedStore(vn1, kp1)
-	st2 := store.NewMemLoggedStore(vn2, kp1)
-	st3 := store.NewMemLoggedStore(vn3, kp1)
+	st1 := store.NewMemLoggedStore(vn1, kp1, nil)
+	st2 := store.NewMemLoggedStore(vn2, kp1, nil)
+	st3 := store.NewMemLoggedStore(vn3, kp1, nil)
 	nt1.RegisterVnode(vn1, st1)
 	nt1.RegisterVnode(vn2, st2)
 	nt1.RegisterVnode(vn3, st3)
@@ -144,9 +158,16 @@ func TestNetTransportTx(t *testing.T) {
 	vn2 := &chord.Vnode{Id: []byte("vnode-2-32324-2"), Host: "127.0.0.1:32324"}
 	vn3 := &chord.Vnode{Id: []byte("vnode-3-32324-3"), Host: "127.0.0.1:32324"}
 
-	st1 := store.NewMemLoggedStore(vn1, kp1)
-	st2 := store.NewMemLoggedStore(vn2, kp1)
-	st3 := store.NewMemLoggedStore(vn3, kp1)
+	tb1 := &testBroadcast{}
+	st1 := store.NewMemLoggedStore(vn1, kp1, tb1)
+	tb1.tl = st1.TxLog()
+	tb2 := &testBroadcast{}
+	st2 := store.NewMemLoggedStore(vn2, kp1, tb2)
+	tb2.tl = st2.TxLog()
+	tb3 := &testBroadcast{}
+	st3 := store.NewMemLoggedStore(vn3, kp1, tb3)
+	tb3.tl = st3.TxLog()
+
 	nt1.RegisterVnode(vn1, st1)
 	nt1.RegisterVnode(vn2, st2)
 	nt1.RegisterVnode(vn3, st3)

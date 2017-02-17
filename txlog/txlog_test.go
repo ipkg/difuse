@@ -4,10 +4,31 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	chord "github.com/ipkg/go-chord"
 )
 
+type testBroadcast struct {
+	tl *TxLog
+}
+
+func (tb *testBroadcast) BroadcastTx(tx *Tx, vn *chord.Vnode) error {
+	var err error
+	for i := 0; i < 3; i++ {
+		if er := tb.tl.ProposeTx(tx); er != nil {
+			err = er
+		}
+	}
+	return err
+}
+
 type testFsm struct {
-	t *testing.T
+	t  *testing.T
+	vn *chord.Vnode
+}
+
+func (tf *testFsm) Vnode() *chord.Vnode {
+	return tf.vn
 }
 
 func (tf *testFsm) Apply(ktx *Tx) error {
@@ -19,9 +40,11 @@ func (tf *testFsm) Apply(ktx *Tx) error {
 func Test_TxLog(t *testing.T) {
 	kp, _ := GenerateECDSAKeypair()
 	store := NewMemTxStore()
-	fsm := &testFsm{t: t}
+	fsm := &testFsm{t: t, vn: &chord.Vnode{Id: []byte("foobarbaz"), Host: "localhost"}}
 
-	txl := NewTxLog(kp, store, fsm)
+	trans := &testBroadcast{}
+	txl := NewTxLog(kp, store, trans, fsm)
+	trans.tl = txl
 	go txl.Start()
 
 	for i := 0; i < 3; i++ {
@@ -32,10 +55,10 @@ func Test_TxLog(t *testing.T) {
 		}
 		ntx.Data = []byte("value")
 		ntx.Sign(kp)
-		if err = txl.AppendTx(ntx); err != nil {
-			t.Fatal(err)
-		}
+		txl.ProposeTx(ntx)
 	}
+
+	<-time.After(500 * time.Millisecond)
 
 	for i := 0; i < 3; i++ {
 		k := []byte(fmt.Sprintf("key-%d", i))
@@ -46,19 +69,23 @@ func Test_TxLog(t *testing.T) {
 		ntx.Data = []byte("updated")
 		ntx.Sign(kp)
 
-		if err = txl.AppendTx(ntx); err != nil {
-			t.Fatal(err)
-		}
+		txl.ProposeTx(ntx)
 	}
 
-	gtx, _ := txl.NewTx([]byte("get-test"))
-	gtx.Data = []byte("test-value")
-	gtx.Sign(kp)
-	if err := txl.AppendTx(gtx); err != nil {
+	txs, _ := txl.store.Transactions([]byte("key-2"), nil)
+	if len(txs) == 0 {
+		t.Error("tx not written")
+	}
+
+	gtx, err := txl.NewTx([]byte("get-test"))
+	if err != nil {
 		t.Fatal(err)
 	}
+	gtx.Data = []byte("test-value")
+	gtx.Sign(kp)
+	txl.ProposeTx(gtx)
 
-	<-time.After(1 * time.Second)
+	<-time.After(2 * time.Second)
 
 	tx, err := store.Get([]byte("get-test"), gtx.Hash())
 	if err != nil {

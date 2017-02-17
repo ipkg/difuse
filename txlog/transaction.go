@@ -19,9 +19,10 @@ func (k *KeyTransactions) Root() []byte {
 	return k.root
 }
 
-// Transactions returns all transactions
+// Transactions returns all transactions beginning at the seek hash.  If seek is nil
+// all transactions are returned.
 func (k *KeyTransactions) Transactions(seek []byte) (TxSlice, error) {
-	if seek == nil {
+	if seek == nil || IsZeroHash(seek) {
 		return k.txs, nil
 	}
 
@@ -31,7 +32,7 @@ func (k *KeyTransactions) Transactions(seek []byte) (TxSlice, error) {
 		}
 	}
 
-	return nil, errNotFound
+	return nil, ErrTxNotFound
 }
 
 // AddTx adds a transaction for the key and updates the merkle root

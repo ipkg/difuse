@@ -24,8 +24,14 @@ func (nls localStore) GetStore(id []byte) (VnodeStore, error) {
 	return nil, errStoreNotFound
 }
 
-func (nls localStore) ReplicateTransactions(key, seek []byte, src, dst *chord.Vnode) error {
-	// Source vnode
+func (nls localStore) Transactions(key, seek []byte, vs ...*chord.Vnode) (txlog.TxSlice, error) {
+
+	st, err := nls.GetStore(vs[0].Id)
+	if err != nil {
+		return nil, err
+	}
+
+	/*// Source vnode
 	sstore, err := nls.GetStore(src.Id)
 	if err != nil {
 		return err
@@ -34,10 +40,10 @@ func (nls localStore) ReplicateTransactions(key, seek []byte, src, dst *chord.Vn
 	dstore, err := nls.GetStore(src.Id)
 	if err != nil {
 		return err
-	}
+	}*/
 
-	txs, err := sstore.Transactions(key, seek)
-	if err != nil {
+	return st.Transactions(key, seek)
+	/*if err != nil {
 		return err
 	}
 	for _, tx := range txs {
@@ -45,7 +51,7 @@ func (nls localStore) ReplicateTransactions(key, seek []byte, src, dst *chord.Vn
 			err = e
 		}
 	}
-	return err
+	return err*/
 }
 
 /*// Snapshot snapshots a vnode store returning a Reader
@@ -101,7 +107,9 @@ func (nls localStore) Stat(key []byte, opts *RequestOptions, vs ...*chord.Vnode)
 		r := &VnodeResponse{Id: vn.Id}
 		store, err := nls.GetStore(vn.Id)
 		if err == nil {
-			r.Data, r.Err = store.Stat(key)
+			if r.Data, r.Err = store.Stat(key); r.Err != nil {
+				r.Data = nil
+			}
 		} else {
 			r.Err = err
 		}
@@ -132,7 +140,9 @@ func (nls localStore) MerkleRootTx(key []byte, opts *RequestOptions, vs ...*chor
 		r := &VnodeResponse{Id: vn.Id, Data: []byte{}}
 		store, err := nls.GetStore(vn.Id)
 		if err == nil {
-			r.Data, r.Err = store.MerkleRootTx(key)
+			if r.Data, r.Err = store.MerkleRootTx(key); r.Err != nil {
+				r.Data = nil
+			}
 		} else {
 			r.Err = err
 		}
@@ -152,6 +162,23 @@ func (nls localStore) AppendTx(tx *txlog.Tx, opts *RequestOptions, vs ...*chord.
 		store, err := nls.GetStore(vn.Id)
 		if err == nil {
 			r.Err = store.AppendTx(tx)
+		} else {
+			r.Err = err
+		}
+		resp[i] = r
+	}
+
+	return resp, nil
+}
+
+func (nls localStore) ProposeTx(tx *txlog.Tx, opts *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error) {
+	resp := make([]*VnodeResponse, len(vs))
+
+	for i, vn := range vs {
+		r := &VnodeResponse{Id: vn.Id, Data: []byte{}}
+		store, err := nls.GetStore(vn.Id)
+		if err == nil {
+			r.Err = store.ProposeTx(tx)
 		} else {
 			r.Err = err
 		}
@@ -203,7 +230,9 @@ func (nls localStore) GetTx(key, txhash []byte, opts *RequestOptions, ids ...*ch
 		r := &VnodeResponse{Id: vn.Id}
 		store, err := nls.GetStore(vn.Id)
 		if err == nil {
-			r.Data, r.Err = store.GetTx(key, txhash)
+			if r.Data, r.Err = store.GetTx(key, txhash); r.Err != nil {
+				r.Data = nil
+			}
 		} else {
 			r.Err = err
 		}
@@ -260,7 +289,9 @@ func (nls localStore) LastTx(key []byte, opts *RequestOptions, ids ...*chord.Vno
 		r := &VnodeResponse{Id: vn.Id}
 		store, err := nls.GetStore(vn.Id)
 		if err == nil {
-			r.Data, r.Err = store.LastTx(key)
+			if r.Data, r.Err = store.LastTx(key); r.Err != nil {
+				r.Data = nil
+			}
 		} else {
 			r.Err = err
 		}
@@ -280,7 +311,9 @@ func (nls localStore) NewTx(key []byte, vl ...*chord.Vnode) ([]*VnodeResponse, e
 		r := &VnodeResponse{Id: vn.Id}
 		store, err := nls.GetStore(vn.Id)
 		if err == nil {
-			r.Data, r.Err = store.NewTx(key)
+			if r.Data, r.Err = store.NewTx(key); r.Err != nil {
+				r.Data = nil
+			}
 		} else {
 			r.Err = err
 		}
@@ -298,7 +331,9 @@ func (nls localStore) GetBlock(key []byte, opts *RequestOptions, ids ...*chord.V
 		r := &VnodeResponse{Id: vn.Id}
 		store, err := nls.GetStore(vn.Id)
 		if err == nil {
-			r.Data, r.Err = store.GetBlock(key)
+			if r.Data, r.Err = store.GetBlock(key); r.Err != nil {
+				r.Data = nil
+			}
 		} else {
 			r.Err = err
 		}
@@ -335,7 +370,9 @@ func (nls localStore) SetBlock(blk []byte, opts *RequestOptions, ids ...*chord.V
 		r := &VnodeResponse{Id: vn.Id}
 		store, err := nls.GetStore(vn.Id)
 		if err == nil {
-			r.Data, r.Err = store.SetBlock(blk)
+			if r.Data, r.Err = store.SetBlock(blk); r.Err != nil {
+				r.Data = nil
+			}
 		} else {
 			r.Err = err
 		}

@@ -14,11 +14,29 @@ import (
 	"github.com/ipkg/difuse/txlog"
 )
 
+type testBroadcast struct {
+	tl *txlog.TxLog
+}
+
+func (tb *testBroadcast) BroadcastTx(tx *txlog.Tx, vn *chord.Vnode) error {
+	var err error
+	for i := 0; i < 3; i++ {
+		if er := tb.tl.AppendTx(tx); er != nil {
+			err = er
+		}
+	}
+	return err
+}
+
 var testVn = &chord.Vnode{Id: []byte("test-vnode-id"), Host: "host"}
 
 func prepStore() (*MemLoggedStore, txlog.Signator) {
 	kp, _ := txlog.GenerateECDSAKeypair()
-	return NewMemLoggedStore(testVn, kp), kp
+
+	tb := &testBroadcast{}
+	mls := NewMemLoggedStore(testVn, kp, tb)
+	tb.tl = mls.txl
+	return mls, kp
 }
 
 func TestStoreNotFound(t *testing.T) {

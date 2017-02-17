@@ -8,6 +8,8 @@ import (
 	chord "github.com/ipkg/go-chord"
 )
 
+const zeroHashString = "00000000000000000000000000000000"
+
 func isZeroHash(b []byte) bool {
 	for _, v := range b {
 		if v != 0 {
@@ -17,7 +19,9 @@ func isZeroHash(b []byte) bool {
 	return true
 }
 
-// maxVotes returns the txhash and count of the key with the longest peer list
+// maxVotes returns the txhash and count of the key with the longest peer list.
+// non-zero hashes are preferred over zero ones.  Zero is only elected when all nodes
+// return zero hash.
 func maxVotes(hm map[string][]string) (lh string, c int) {
 	for k, v := range hm {
 		l := len(v)
@@ -26,6 +30,24 @@ func maxVotes(hm map[string][]string) (lh string, c int) {
 			lh = k
 		}
 	}
+
+	// If zero hash is elected then make sure all are zero or else pick the majority
+	// with non-zero hash
+	if lh == zeroHashString && len(hm) > 1 {
+		c = 0
+		for k, v := range hm {
+			if k == zeroHashString {
+				continue
+			}
+
+			l := len(v)
+			if l > c {
+				c = l
+				lh = k
+			}
+		}
+	}
+
 	return
 }
 
@@ -117,11 +139,20 @@ func IsAdvertisableAddress(hp string) (bool, error) {
 	return true, nil
 }
 
-func shortID(vn *chord.Vnode) string {
+/*func shortID(vn *chord.Vnode) string {
 	if vn != nil {
 		return vn.Host + "/" + vn.String()[:12]
 	}
 	return "<nil>"
+}*/
+func mergeErrors(err1, err2 error) error {
+	if err1 == nil {
+		return err2
+	} else if err2 == nil {
+		return err1
+	} else {
+		return fmt.Errorf("%s\n%s", err1, err2)
+	}
 }
 
 // ShortVnodeID returns the shortened vnode id

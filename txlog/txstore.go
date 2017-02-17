@@ -61,7 +61,7 @@ func (mts *MemTxStore) Last(key []byte) (*Tx, error) {
 		}
 	}
 
-	return nil, errNotFound
+	return nil, ErrTxNotFound
 }
 
 // MerkleRoot returns the merkle root of the transaction log for a given key. If key is nil
@@ -78,7 +78,7 @@ func (mts *MemTxStore) MerkleRoot(key []byte) ([]byte, error) {
 		return v.Root(), nil
 	}
 
-	return nil, errNotFound
+	return nil, ErrKeyNotFound
 }
 
 // Transactions returns all transactions for the key starting from the seek point.
@@ -87,8 +87,9 @@ func (mts *MemTxStore) Transactions(key, seek []byte) (TxSlice, error) {
 	defer mts.mu.RUnlock()
 
 	v, ok := mts.m[string(key)]
+
 	if !ok {
-		return nil, errNotFound
+		return nil, ErrKeyNotFound
 	}
 
 	return v.Transactions(seek)
@@ -125,7 +126,7 @@ func (mts *MemTxStore) Get(key []byte, txhash []byte) (*Tx, error) {
 		}
 	}
 
-	return nil, errNotFound
+	return nil, ErrNotFound
 }
 
 func (mts *MemTxStore) keysMerkleTree() (*merkle.Tree, error) {

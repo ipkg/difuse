@@ -1,25 +1,43 @@
 package txlog
 
 import (
-	"fmt"
+	"encoding/hex"
+	"errors"
 	"log"
 	"sync"
+	"time"
+
+	chord "github.com/ipkg/go-chord"
 )
 
 const (
-	defaultTxBufIn = 32
+	defaultTxBuf = 32
 
-	errPrevHash = "previous hash want=%x have=%x"
+	errPrevHash = "previous hash key=%s want=%x have=%x"
 )
 
 var (
-	//errPrevHash = fmt.Errorf("previous hash mismatch")
-	errNotFound = fmt.Errorf("not found")
+	ErrNotFound    = errors.New("not found")
+	ErrKeyNotFound = errors.New("key not found")
+	ErrTxNotFound  = errors.New("tx not found")
+	ErrPrevHash    = errors.New("previous hash")
 )
 
 // FSM represents the finite state machine
 type FSM interface {
-	Apply(ktx *Tx) error
+	Apply(ktx *Tx) error // called when a tx has been accepted by the log
+	Vnode() *chord.Vnode // vnode of the fsm is attached to.
+}
+
+// Transport interface is the network transport for transaction logs.
+type Transport interface {
+	// tx to broadcast and the vnode broadcasting this tx
+	BroadcastTx(tx *Tx, src *chord.Vnode) error
+}
+
+type orphan struct {
+	lastSeen int64
+	TxSlice
 }
 
 // TxLog is a key based transaction log
@@ -35,20 +53,34 @@ type TxLog struct {
 
 	// incoming verified transactions from the user
 	in chan *Tx
-	// out to the store. unbuffered as we want to block
+	// tx's that need reconciliation.  tx's are sent to this channel when an out
+	// of order tx is received.
+	//rec chan *Tx
+
 	shutdown chan bool
 	// finite state machine called when log is to be applied
 	fsm FSM
+
+	// orphan tx's that do not have votes yet.
+	olock   sync.RWMutex
+	orphans map[string]*orphan
+	// votes required before a tx can be added to the log
+	reqvotes int
+	// network transport
+	transport Transport
 }
 
-func NewTxLog(kp Signator, store TxStore, fsm FSM) *TxLog {
+func NewTxLog(kp Signator, store TxStore, trans Transport, fsm FSM) *TxLog {
 	txl := &TxLog{
-		fsm:      fsm,
-		kp:       kp,
-		store:    store,
-		shutdown: make(chan bool),
-		in:       make(chan *Tx, defaultTxBufIn),
-		lastQTx:  make(map[string]*Tx),
+		fsm:       fsm,
+		kp:        kp,
+		store:     store,
+		shutdown:  make(chan bool, 1),
+		in:        make(chan *Tx, defaultTxBuf),
+		lastQTx:   make(map[string]*Tx),
+		orphans:   make(map[string]*orphan),
+		reqvotes:  3,
+		transport: trans,
 	}
 
 	return txl
@@ -77,16 +109,9 @@ func (txl *TxLog) NewTx(key []byte) (*Tx, error) {
 	return NewTx(key, ZeroHash(), nil), nil
 }
 
-// AppendTx to the log.  Verfiy the signature before submitting to the channel.
-func (txl *TxLog) AppendTx(ktx *Tx) error {
-	// Check if we have ktx in the our store.
-	_, err := txl.store.Get(ktx.Key, ktx.Hash())
-	if err == nil {
-		return nil
-	}
+func (txl *TxLog) verifyTx(ktx *Tx) error {
 
-	err = ktx.VerifySignature(txl.kp)
-	if err != nil {
+	if err := ktx.VerifySignature(txl.kp); err != nil {
 		return err
 	}
 
@@ -94,26 +119,121 @@ func (txl *TxLog) AppendTx(ktx *Tx) error {
 	if ltx != nil {
 		lh := ltx.Hash()
 		if !EqualBytes(lh, ktx.PrevHash) {
-			return fmt.Errorf(errPrevHash, lh[:8], ktx.PrevHash[:8])
+			//log.Printf(errPrevHash, ktx.Key, ltx.Hash()[:8], ktx.PrevHash[:8])
+			return ErrPrevHash
 		}
 	} else {
-		// If last tx is found make sure this tx's previous hash is zero i.e
+		// If last tx is not ound make sure this tx's previous hash is zero i.e
 		// the first tx for this key.
 		zh := ZeroHash()
 		if !EqualBytes(ktx.PrevHash, zh) {
-			return fmt.Errorf(errPrevHash, zh[:8], ktx.PrevHash[:8])
+			//log.Printf(errPrevHash, ktx.Key, zh[:8], ktx.PrevHash[:8])
+			return ErrPrevHash
 		}
 	}
+	return nil
+}
 
-	txl.updateQLastTx(ktx)
-	// Queue tx for fsm to apply
-	txl.in <- ktx
+// AppendTx to the log.  Verfiy the signature before submitting to the channel.
+func (txl *TxLog) AppendTx(tx *Tx) error {
+	// Check if we have ktx in the our store.
+	_, err := txl.store.Get(tx.Key, tx.Hash())
+	if err == nil {
+		return nil
+	}
+
+	if err := tx.VerifySignature(txl.kp); err != nil {
+		return err
+	}
+
+	return txl.queueTx(tx)
+
+	//return nil
+}
+
+// ProposeTx adds tx to the orphan tx pool.  If we have required votes then queue the tx
+// to be appended to the log and remove any orphan tx's that have the prev hash of the tx
+// that was just accepted.
+func (txl *TxLog) ProposeTx(tx *Tx) error {
+	// check if we have it in the buffer
+	//_, err := txl.LastTx(tx.Key)
+	//if err == nil {
+	//	return nil
+	//}
+
+	// Check if we have ktx in the our store.
+	_, err := txl.store.Get(tx.Key, tx.Hash())
+	if err == nil {
+		return nil
+	}
+
+	if err := tx.VerifySignature(txl.kp); err != nil {
+		return err
+	}
+
+	return txl.proposeTx(tx)
+}
+
+func (txl *TxLog) proposeTx(tx *Tx) error {
+	txkey := hex.EncodeToString(tx.Hash())
+
+	txl.olock.Lock()
+	v, ok := txl.orphans[txkey]
+	if !ok {
+		txl.orphans[txkey] = &orphan{TxSlice: TxSlice{tx}, lastSeen: time.Now().Unix()}
+		txl.olock.Unlock()
+		return txl.transport.BroadcastTx(tx, txl.fsm.Vnode())
+	}
+
+	defer txl.olock.Unlock()
+
+	v.TxSlice = append(v.TxSlice, tx)
+	v.lastSeen = time.Now().Unix()
+	txl.orphans[txkey] = v
+
+	if len(v.TxSlice) == txl.reqvotes {
+		log.Printf("action=elected tx=%x key=%s vnode=%x", tx.Hash()[:8], tx.Key, txl.fsm.Vnode().Id[:8])
+		return txl.queueTx(tx)
+	}
+
+	//delete(txl.orphans, txkey)
+
+	// remove all tx's matching the above prev hash as they are no longer valid.
+	/*for k, v := range txl.orphans {
+		if EqualBytes(v.First().PrevHash, tx.PrevHash) {
+			delete(txl.orphans, k)
+		}
+	}*/
 
 	return nil
 }
 
-// Start the txlog to process incoming transactions
+func (txl *TxLog) reapOrphans() {
+	for {
+		time.Sleep(30 * time.Second)
+		txl.reapOrphansOnce()
+	}
+}
+
+func (txl *TxLog) reapOrphansOnce() {
+
+	n := time.Now().Unix()
+
+	txl.olock.Lock()
+	defer txl.olock.Unlock()
+
+	for k, v := range txl.orphans {
+		if idle := n - v.lastSeen; idle >= 10 {
+			delete(txl.orphans, k)
+		}
+	}
+}
+
+// Start the txlog to process incoming transactions and reconciler
 func (txl *TxLog) Start() {
+	// start reaping orphan tx's
+	go txl.reapOrphans()
+
 	// Range over incoming tx's until channel is closed.
 	for ktx := range txl.in {
 
@@ -125,10 +245,32 @@ func (txl *TxLog) Start() {
 	txl.shutdown <- true
 }
 
-func (txl *TxLog) updateQLastTx(ktx *Tx) {
+// Queue tx for fsm to apply
+func (txl *TxLog) queueTx(ktx *Tx) error {
+	ltx, _ := txl.LastTx(ktx.Key)
+	if ltx != nil {
+		lh := ltx.Hash()
+		if !EqualBytes(lh, ktx.PrevHash) {
+			//log.Printf(errPrevHash, ktx.Key, ltx.Hash()[:8], ktx.PrevHash[:8])
+			return ErrPrevHash
+		}
+	} else {
+		// If last tx is not ound make sure this tx's previous hash is zero i.e
+		// the first tx for this key.
+		zh := ZeroHash()
+		if !EqualBytes(ktx.PrevHash, zh) {
+			//log.Printf(errPrevHash, ktx.Key, zh[:8], ktx.PrevHash[:8])
+			return ErrPrevHash
+		}
+	}
+
 	txl.txlock.Lock()
 	txl.lastQTx[string(ktx.Key)] = ktx
 	txl.txlock.Unlock()
+
+	txl.in <- ktx
+
+	return nil
 }
 
 // applyTx applies a transaction to the log.
@@ -150,5 +292,6 @@ func (txl *TxLog) applyTx(ktx *Tx) error {
 // Shutdown closes the incoming tx channel and waits for a shutdown from the loop.
 func (txl *TxLog) Shutdown() {
 	close(txl.in)
+	//close(txl.rec)
 	<-txl.shutdown
 }

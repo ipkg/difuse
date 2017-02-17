@@ -3,7 +3,7 @@ package store
 import "fmt"
 
 const (
-	// TxTypeSet represents a set transaction type
+	// TxTypeSet represents an update transaction type
 	TxTypeSet byte = iota + 3
 	// TxTypeDelete represents a delete transaction type
 	TxTypeDelete

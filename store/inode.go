@@ -73,6 +73,15 @@ func NewInodeFromData(key, data []byte) *Inode {
 	rk.Blocks = [][]byte{sh[:]}
 	return rk
 }*/
+func NewDirInode(id []byte) *Inode {
+	return &Inode{
+		Id:     id,
+		Type:   DirInodeType,
+		Blocks: make([][]byte, 0),
+		txroot: txlog.ZeroHash(),
+	}
+}
+
 func NewKeyInodeWithValue(key, value []byte) *Inode {
 	return &Inode{
 		Id:     key,
@@ -88,6 +97,17 @@ func (r *Inode) TxRoot() []byte {
 	return r.txroot
 }
 
+// ContainsBlock returns whether the block with the given id is referenced in this inode.
+func (r *Inode) ContainsBlock(id []byte) bool {
+	for _, b := range r.Blocks {
+		if txlog.EqualBytes(b, id) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // MarshalJSON is for user legibility
 func (r *Inode) MarshalJSON() ([]byte, error) {
 	m := map[string]interface{}{
@@ -97,13 +117,22 @@ func (r *Inode) MarshalJSON() ([]byte, error) {
 		"txroot": fmt.Sprintf("%x", r.txroot),
 	}
 
-	if r.Type == FileInodeType {
+	switch r.Type {
+	case FileInodeType:
 		bhs := make([]string, len(r.Blocks))
 		for i, v := range r.Blocks {
 			bhs[i] = fmt.Sprintf("%x", v)
 		}
 		m["blocks"] = bhs
-	} else {
+
+	case DirInodeType:
+		bhs := make([]string, len(r.Blocks))
+		for i, v := range r.Blocks {
+			bhs[i] = string(v)
+		}
+		m["blocks"] = bhs
+
+	default:
 		m["blocks"] = r.Blocks
 	}
 

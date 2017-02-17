@@ -77,7 +77,7 @@ or [http://localhost:9091](http://localhost:9091)
             - [x] All
             - [ ] Leader
             - [ ] Quorum
-            - [ ] Lazy   
+            - [ ] Lazy
     - [ ] Replication/Healing
             - [x] Node join replication
             - [ ] Transaction log stagnant drift

@@ -21,10 +21,14 @@ fi
 #if [ "${VALUE_PREFIX}" == "" ]; then
 #    VALUE_PREFIX="value"
 #fi
-
+stime=`date`
 for i in `seq ${COUNT}`; do
     echo "* Key: ${PREFIX}${i}"
     d=`date '+%d.%m.%Y-%H:%M:%S'`
     curl -i localhost:${PORT}/${PREFIX}${i} -d "${i}-${d}"
     echo -e "\n-"
 done
+etime=`date`
+
+echo "Start: ${stime}"
+echo "End  : ${etime}"
