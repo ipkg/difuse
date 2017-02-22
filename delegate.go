@@ -15,21 +15,34 @@ func (s *Difuse) Init(local *chord.Vnode) {
 
 // NewPredecessor is called when a new predecessor is found
 func (s *Difuse) NewPredecessor(local, remoteNew, remotePrev *chord.Vnode) {
+	log.Printf("INF action=predecessor src=%s dst=%s", ShortVnodeID(local), ShortVnodeID(remoteNew))
+
 	// skip local
 	if local.Host == remoteNew.Host {
 		return
 	}
 
-	// TODO: queue rather than running right away
-	/*if err := s.transport.TransferKeys(local, remoteNew); err != nil {
-		log.Printf("action=transfer status=failed src=%s dst=%s msg='%v'", ShortVnodeID(local), ShortVnodeID(remoteNew), err)
-	}
+	//if err := s.transferLeaderKeys(local, remoteNew); err != nil {
+	//	log.Printf("ERR action=transfer src=%s dst=%s msg='%v'", ShortVnodeID(local), ShortVnodeID(remoteNew), err)
+	//}
 
-	if err := s.transport.ReplicateBlocks(local, remoteNew); err != nil {
+	// TODO: queue rather than running right away
+
+	//if err := s.repl.qVnodeCheck(local); err != nil {
+	//	log.Printf("ERR msg='%v'", err)
+	//}
+
+	if err := s.transport.TransferKeys(local, remoteNew); err != nil {
+		log.Printf("ERR action=transfer status=failed src=%s dst=%s msg='%v'", ShortVnodeID(local), ShortVnodeID(remoteNew), err)
+	}
+	//else {
+	//	log.Printf("INF action=transfer status=ok src=%s dst=%s", ShortVnodeID(local), ShortVnodeID(remoteNew))
+	//}
+
+	/*if err := s.transport.ReplicateBlocks(local, remoteNew); err != nil {
 		log.Printf("action=replicate-blocks status=failed msg='%v'", err)
 	}*/
 
-	log.Printf("INF action=transfer src=%s dst=%s", ShortVnodeID(local), ShortVnodeID(remoteNew))
 }
 
 // Leaving is called when local node is leaving the ring

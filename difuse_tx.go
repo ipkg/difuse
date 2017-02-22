@@ -8,131 +8,132 @@ import (
 	chord "github.com/ipkg/go-chord"
 )
 
+// BroadcastTx broadcasts the transaction to a set of peers minus the source.
 func (s *Difuse) BroadcastTx(tx *txlog.Tx, src *chord.Vnode) error {
 	_, vl, err := s.ring.Lookup(s.config.Chord.NumSuccessors, tx.Key)
 	if err != nil {
 		return err
 	}
 
-	// remove supplied source from list
-	var fl []*chord.Vnode
-	for i, v := range vl {
-		if txlog.EqualBytes(v.Id, src.Id) {
-			fl = append(vl[:i], vl[i+1:]...)
-			break
-		}
-	}
-	if fl == nil {
-		return fmt.Errorf("key %s does not belong src vn %s", tx.Key, ShortVnodeID(src))
-	}
-
-	//log.Printf("action=broadcast key=%s tx=%x src=%s net=%d", tx.Key, tx.Hash()[:8], ShortVnodeID(src), len(fl))
-
-	//l := len(fl) - 1
-	//ch := make(chan *VnodeResponse, l+1)
 	opts := &RequestOptions{Consistency: ConsistencyAll}
 
-	/*go func(l []*chord.Vnode) {
+	rch := make(chan *VnodeResponse, 3)
 
-	        for _, v := range l {
-				if _, er := s.transport.ProposeTx(tx, opts, v); er != nil {
-					log.Println("ERR", er)
-				}
-			}
-		}(fl)*/
-
-	okCh := make(chan bool)
-	errCh := make(chan error)
-
-	for _, v := range fl {
+	for _, v := range vl {
+		//log.Printf("Broadcast src=%s dst=%s", ShortVnodeID(src), ShortVnodeID(v))
 		go func(vn *chord.Vnode) {
-			if _, er := s.transport.ProposeTx(tx, opts, vn); er != nil {
-				errCh <- er
-				//log.Println("ERR", er)
-			} else {
-				okCh <- true
+			resp, er := s.transport.ProposeTx(tx, opts, vn)
+			if er != nil {
+				rch <- &VnodeResponse{Id: []byte(ShortVnodeID(vn)), Err: err}
+				return
 			}
+
+			// Submit key check as vn may be out of sync
+			if resp[0].Err != nil && resp[0].Err.Error() == "previous hash" {
+				resp[0].Err = nil
+				s.replOut <- &ReplRequest{Src: src, Dst: vn, Key: tx.Key}
+			}
+
+			resp[0].Id = []byte(ShortVnodeID(vn))
+			rch <- resp[0]
 		}(v)
 	}
 
-	var c, t int
-	quorum := (len(fl) / 2) + 1
-	l := len(fl)
-	for {
+	var (
+		c      int
+		quorum = (s.config.Chord.NumSuccessors / 2) + 1
+		l      = len(vl) - 1
+	)
+
+	for i := 0; i < l; i++ {
 		if c == quorum {
-			err = nil
-			break
-		} else if t == l {
 			break
 		}
 
-		select {
-		case <-okCh:
+		resp := <-rch
+		if resp.Err == nil || resp.Err.Error() == "tx exists" {
 			c++
+			continue
+		}
+
+		log.Printf("ERR vnode=%s key=%s msg='%v'", resp.Id, tx.Key, resp.Err)
+		err = resp.Err
+
+		//if c == l {
+		//err = nil
+		//	break
+		//}
+
+		/*select {
+		/*case <-okCh:
+			//c++
 		case er := <-errCh:
-			log.Println("ERR", er)
+			log.Printf("ERR vnode=%s key=%s msg='%v'", ShortVnodeID(src), tx.Key, er)
 			err = er
-		}
+		}*/
 
-		t++
 	}
+
 	return err
-
-	/*i := 0
-	for resp := range ch {
-		err = mergeErrors(err, resp.Err)
-		i++
-		if i == l {
-			break
-		}
-	}
-
-	return err*/
-	//return nil
 }
 
+// shared function for delete and set tx
 func (s *Difuse) proposeTx(txtype byte, key, data []byte, opts *RequestOptions) (*chord.Vnode, error) {
-	_, vl, err := s.ring.Lookup(s.config.Chord.NumSuccessors, key)
+	/*_, vl, err := s.ring.Lookup(s.config.Chord.NumSuccessors, key)
+	if err != nil {
+		return nil, err
+	}*/
+	l, _, _, err := s.LookupLeader(key)
 	if err != nil {
 		return nil, err
 	}
 
-	vm := vnodesByHost(vl)
-	lvns, ok := vm[s.config.Chord.Hostname]
-	if !ok {
-		return vl[0], errNoLocalVnode
+	if !s.isLocalVnode(l) {
+		return l, ErrNotLeader
 	}
-	vn := lvns[0]
 
-	rsp, err := s.transport.NewTx(key, vn)
+	//vm := vnodesByHost(vl)
+	//lvns, ok := vm[s.config.Chord.Hostname]
+	//if !ok {
+	//	return vl[0], errNoLocalVnode
+	//}
+	//vn := lvns[0]
+
+	rsp, err := s.transport.NewTx(key, l)
 	if err != nil {
-		return vn, err
+		return l, err
 	} else if rsp[0].Err != nil {
-		return vn, rsp[0].Err
+		return l, rsp[0].Err
 	}
 
 	tx := rsp[0].Data.(*txlog.Tx)
 	tx.Data = append([]byte{txtype}, data...)
 	if err = tx.Sign(s.signator); err != nil {
-		return vn, err
+		return l, err
 	}
 
-	_, err = s.transport.ProposeTx(tx, nil, vn)
-	return vn, err
+	var prsp []*VnodeResponse
+	if prsp, err = s.transport.ProposeTx(tx, nil, l); err == nil {
+		if prsp[0].Err != nil {
+			err = prsp[0].Err
+		}
+	}
+
+	return l, err
 }
 
 // appendTx appends a transaction to the log based on the consistency.  If this node is not the leader
 // for the key, the leader vnode and error are returned otherwise just the leader vnode. This always
 // processes leader first then remainder based on consistency
-func (s *Difuse) appendTx_DEPRECATE(txtype byte, key, data []byte, opts *RequestOptions) (*chord.Vnode, error) {
+func (s *Difuse) appendTx(txtype byte, key, data []byte, opts *RequestOptions) (*chord.Vnode, error) {
 
 	l, _, vm, err := s.LookupLeader(key)
 	if err != nil {
 		return nil, err
 	}
 
-	// If we are not the leader return the leader and a not-leader error
-	if !s.isLeader(l) {
+	// If we are not the leader ie we do not have the vnode locally return the leader and a not-leader error
+	if !s.isLocalVnode(l) {
 		return l, ErrNotLeader
 	}
 
@@ -219,10 +220,11 @@ func (s *Difuse) appendTx_DEPRECATE(txtype byte, key, data []byte, opts *Request
 	return l, nil*/
 
 	case ConsistencyAll:
-		for host, vns := range vm {
+		for h, vns := range vm {
 
 			resp, e := s.transport.AppendTx(tx, opts, vns...)
 			if e != nil {
+				log.Printf("ERR key=%s tx=%x msg='%v'", tx.Key, tx.Hash()[:8], e)
 				err = e
 				continue
 			}
@@ -231,8 +233,15 @@ func (s *Difuse) appendTx_DEPRECATE(txtype byte, key, data []byte, opts *Request
 				if r.Err == nil {
 					continue
 				}
-				// queue replication/check
-				s.replOut <- &ReplRequest{Src: l, Dst: &chord.Vnode{Id: r.Id, Host: host}, Key: key}
+				log.Printf("ERR vnode=%s key=%s tx=%x msg='%v'", ShortVnodeID(&chord.Vnode{Id: r.Id, Host: h}), tx.Key, tx.Hash()[:8], r.Err)
+
+				//if r.Err == txlog.ErrPrevHash {
+				//log.Println("SUBMITTING")
+				//s.replOut <- &ReplRequest{Src: l, Dst: &chord.Vnode{Id: r.Id, Host: h}, Key: key}
+				//	continue
+				//}
+
+				err = r.Err
 			}
 
 		}

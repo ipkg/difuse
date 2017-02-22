@@ -153,6 +153,12 @@ func (hs *httpServer) handleLocate(w http.ResponseWriter, r *http.Request) (inte
 		khash, data, err = hs.tt.LocateInode([]byte(key))
 		etime = ct.stop()
 
+	case strings.HasPrefix(spath, "tx/key/"):
+		key := strings.TrimPrefix(spath, "tx/key/")
+		ct.start()
+		khash, data, err = hs.tt.LocateTxKey([]byte(key))
+		etime = ct.stop()
+
 	case strings.HasPrefix(spath, "block/"):
 		keystr := strings.TrimPrefix(spath, "block/")
 
@@ -187,12 +193,13 @@ func (hs *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case strings.HasPrefix(upath, "repair/"):
-		kstr := strings.TrimPrefix(upath, "repair/")
+		/*kstr := strings.TrimPrefix(upath, "repair/")
 		ct.start()
 		data, err = hs.tt.RepairLocalVnodes([]byte(kstr))
 		etime = ct.stop()
 
-		w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", etime))
+		w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", etime))*/
+		err = fmt.Errorf("TBI")
 
 	case strings.HasPrefix(upath, "block"):
 		data, err = hs.handleBlockData(w, r)

@@ -208,21 +208,21 @@ func TestNetTransportTx(t *testing.T) {
 		t.Fatalf("result size mismatch")
 	}
 
-	resp, err = nt1.LastTx([]byte("key"), nil, vs...)
+	rtx, err := nt1.LastTx(vn1, []byte("key"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for _, r := range resp {
-		if r.Err != nil {
-			t.Error(r.Err)
-		} else {
-			rtx := r.Data.(*txlog.Tx)
-			if !reflect.DeepEqual(tx.Hash(), rtx.Hash()) {
-				t.Error("hash mismatch")
-			}
-		}
+	/*for _, r := range resp {
+	if r.Err != nil {
+		t.Error(r.Err)
+	} else {
+		rtx := r.Data.(*txlog.Tx)*/
+	if !reflect.DeepEqual(tx.Hash(), rtx.Hash()) {
+		t.Error("hash mismatch")
 	}
+	//	}
+	//}
 
 	resp, err = nt1.Stat([]byte("key"), nil, vs...)
 	if err != nil {

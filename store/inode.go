@@ -175,6 +175,7 @@ func (r *Inode) Serialize(fb *flatbuffers.Builder) flatbuffers.UOffsetT {
 		fb.PrependUOffsetT(v)
 	}
 	bh := fb.EndVector(len(r.Blocks))
+
 	kp := fb.CreateByteString(r.Id)
 	rp := fb.CreateByteString(r.txroot)
 

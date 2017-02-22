@@ -3,6 +3,7 @@ package txlog
 import (
 	"encoding/hex"
 	"encoding/json"
+	"time"
 
 	"github.com/btcsuite/fastsha256"
 )
@@ -19,6 +20,7 @@ type TxHeader struct {
 	PrevHash    []byte
 	Source      []byte // from pubkey
 	Destination []byte // to pubkey
+	Timestamp   uint64 // Timestamp when tx was created
 }
 
 // Tx represents a single transaction
@@ -29,11 +31,14 @@ type Tx struct {
 	Data      []byte
 }
 
-func (t *Tx) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]string{
-		"prev": hex.EncodeToString(t.PrevHash),
-		"id":   hex.EncodeToString(t.Hash()),
-		"key":  string(t.Key),
+// MarshalJSON is a custom JSON marshaller for a tx.  It properly formats the hashes
+// and includes everything except the tx data.
+func (tx *Tx) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"prev":      hex.EncodeToString(tx.PrevHash),
+		"id":        hex.EncodeToString(tx.Hash()),
+		"key":       string(tx.Key),
+		"timestamp": tx.Timestamp,
 	})
 }
 
@@ -42,7 +47,8 @@ func NewTx(key, prevHash, data []byte) *Tx {
 	return &Tx{
 		Key: key,
 		TxHeader: &TxHeader{
-			PrevHash: prevHash,
+			PrevHash:  prevHash,
+			Timestamp: uint64(time.Now().UnixNano()),
 		},
 		Data: data,
 	}

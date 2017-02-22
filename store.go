@@ -133,23 +133,27 @@ func (nls localStore) Stat(key []byte, opts *RequestOptions, vs ...*chord.Vnode)
 	return resp, nil
 }
 
-func (nls localStore) MerkleRootTx(key []byte, opts *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error) {
-	resp := make([]*VnodeResponse, len(vs))
+func (nls localStore) MerkleRootTx(vn *chord.Vnode, key []byte) ([]byte, error) {
+	//resp := make([]*VnodeResponse, len(vs))
 
-	for i, vn := range vs {
-		r := &VnodeResponse{Id: vn.Id, Data: []byte{}}
-		store, err := nls.GetStore(vn.Id)
-		if err == nil {
-			if r.Data, r.Err = store.MerkleRootTx(key); r.Err != nil {
-				r.Data = nil
-			}
-		} else {
-			r.Err = err
-		}
-		resp[i] = r
+	//for i, vn := range vs {
+	//	r := &VnodeResponse{Id: vn.Id, Data: []byte{}}
+	store, err := nls.GetStore(vn.Id)
+	if err != nil {
+		return nil, err
 	}
 
-	return resp, nil
+	return store.MerkleRootTx(key)
+	//if r.Data, r.Err = store.MerkleRootTx(key); r.Err != nil {
+	//		r.Data = nil
+	//	}
+	//} else {
+	//	r.Err = err
+	//	}
+	//	resp[i] = r
+	//}
+
+	//return resp, nil
 }
 
 // AppendTx appends a keyed tx to the given vnodes.  All vnodes in the slice are assumed to be local vnodes.
@@ -246,9 +250,18 @@ func (nls localStore) GetTx(key, txhash []byte, opts *RequestOptions, ids ...*ch
 	return resp, nil
 }
 
+func (nls localStore) GetTxKey(vn *chord.Vnode, key []byte) (*txlog.TxKey, error) {
+	st, err := nls.GetStore(vn.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	return st.GetTxKey(key)
+}
+
 // LastTx gets the last tx for a given key from multiple vnodes based on the specified consistency.  All vnodes in the
 // slice are assumed to be local vnodes
-func (nls localStore) LastTx(key []byte, opts *RequestOptions, ids ...*chord.Vnode) ([]*VnodeResponse, error) {
+func (nls localStore) LastTx(vn *chord.Vnode, key []byte) (*txlog.Tx, error) {
 	/*opts := DefaultRequestOptions()
 	if len(options) > 0 {
 		opts = options[0]
@@ -284,25 +297,30 @@ func (nls localStore) LastTx(key []byte, opts *RequestOptions, ids ...*chord.Vno
 		}
 
 	case ConsistencyAll:*/
-	resp := make([]*VnodeResponse, len(ids))
-	for i, vn := range ids {
-		r := &VnodeResponse{Id: vn.Id}
-		store, err := nls.GetStore(vn.Id)
-		if err == nil {
-			if r.Data, r.Err = store.LastTx(key); r.Err != nil {
-				r.Data = nil
-			}
-		} else {
-			r.Err = err
-		}
-		resp[i] = r
+	//resp := make([]*VnodeResponse, len(ids))
+	//for i, vn := range ids {
+	//r := &VnodeResponse{Id: vn.Id}
+	store, err := nls.GetStore(vn.Id)
+	if err != nil {
+		return nil, err
 	}
+
+	return store.LastTx(key)
+	/*if err == nil {
+		if r.Data, r.Err = store.LastTx(key); r.Err != nil {
+			r.Data = nil
+		}
+	} else {
+		r.Err = err
+	}
+	resp[i] = r*/
+	//}
 
 	/*default:
 		return nil, errInvalidConsistencyLevel
 	}*/
 
-	return resp, nil
+	//return resp, nil
 }
 
 func (nls localStore) NewTx(key []byte, vl ...*chord.Vnode) ([]*VnodeResponse, error) {

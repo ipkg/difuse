@@ -29,17 +29,29 @@ var (
 
 // VnodeStore implements an actual persistent store.
 type VnodeStore interface {
+	// Return vnode for this store
+	Vnode() *chord.Vnode
+
+	CreateTxKey(key []byte) error
+	GetTxKey(key []byte) (*txlog.TxKey, error)
+
 	ProposeTx(tx *txlog.Tx) error
 	AppendTx(tx *txlog.Tx) error
 	GetTx(key []byte, txhash []byte) (*txlog.Tx, error)
 	NewTx(key []byte) (*txlog.Tx, error)
+
 	LastTx(key []byte) (*txlog.Tx, error)
-	IterTx(func(key []byte, keytxs *txlog.KeyTransactions) error) error
+	IterTx(func(keytxs *txlog.KeyTransactions) error) error
+
 	// MerkleRoot of all transactions for the given key
 	MerkleRootTx(key []byte) ([]byte, error)
 	// Transactions returns transactions starting from the seek point.  If seek is
 	// nil or a zero-hash, all transactions are returned.
 	Transactions(key, seek []byte) (txlog.TxSlice, error)
+
+	// SetMode
+	SetMode(key []byte, mode txlog.KeyMode) error
+	Mode(key []byte) (txlog.KeyMode, error)
 
 	// Iterate over all inodes in the store.
 	IterInodes(func(key []byte, inode *store.Inode) error) error
@@ -56,6 +68,7 @@ type VnodeStore interface {
 	DeleteBlock(hash []byte) error
 	// Iterate over all blocks in the store.
 	IterBlocks(func([]byte, []byte) error) error
+	// Returns the no. of blocks in the store.
 	BlockCount() int64
 
 	Snapshot() (io.ReadCloser, error)
@@ -83,13 +96,16 @@ type Transport interface {
 	AppendTx(tx *txlog.Tx, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
 	ProposeTx(tx *txlog.Tx, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
 	GetTx(key, txhash []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
-	LastTx(key []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
-	MerkleRootTx(key []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
+
 	NewTx(key []byte, vs ...*chord.Vnode) ([]*VnodeResponse, error)
 	Transactions(key, seek []byte, vs ...*chord.Vnode) (txlog.TxSlice, error)
 
 	// Transfer keys from the local vnode to the remote one.
 	TransferKeys(src, dst *chord.Vnode) error
+
+	LastTx(vn *chord.Vnode, key []byte) (*txlog.Tx, error)
+	MerkleRootTx(vn *chord.Vnode, key []byte) ([]byte, error)
+	GetTxKey(vn *chord.Vnode, key []byte) (*txlog.TxKey, error)
 
 	// Lookup the leader for the given key on the given host returning the leader, an ordered list of
 	// other vnodes as well as a host-to-vnode map.
@@ -124,6 +140,8 @@ type Difuse struct {
 
 	// keys pulled from remote to local i.e. transfer request
 	replIn chan *ReplRequest
+
+	//repl *replicator
 }
 
 // NewDifuse instantiates a new Difuse instance, generating a new keypair and setting the
@@ -135,9 +153,13 @@ func NewDifuse(conf *Config, trans Transport) *Difuse {
 		signator: sig,
 		replOut:  make(chan *ReplRequest, replicationQSize),
 		replIn:   make(chan *ReplRequest, replicationQSize),
+		//repl:     newReplicator(),
 	}
 
 	slt.transport = newLocalTransport(trans, slt)
+
+	//slt.repl.config = slt.config
+	//slt.repl.trans = slt.transport
 
 	trans.RegisterTransferQ(slt.replIn)
 	go slt.startOutboundReplication()
@@ -197,6 +219,7 @@ func (s *Difuse) createParentPath(parentPath []byte, child []byte) error {
 // RegisterRing registers the chord ring to the difuse instance.
 func (s *Difuse) RegisterRing(ring *chord.Ring) {
 	s.ring = ring
+	//s.repl.ring = ring
 	s.transport.Register(s)
 }
 
@@ -218,7 +241,7 @@ func (s *Difuse) Delete(key []byte, options ...RequestOptions) (*store.Inode, *R
 		return nil, nil, err
 	}
 
-	log.Printf("DELETING INODE %#v", inode)
+	//log.Printf("DELETING INODE %#v", inode)
 
 	rmeta := &ResponseMeta{}
 	if len(options) > 0 {
@@ -271,10 +294,15 @@ func (s *Difuse) DeleteInode(inode *store.Inode, options *RequestOptions) (*chor
 
 	return lvn, err*/
 	vn, err := s.proposeTx(store.TxTypeDelete, inode.Id, fb.Bytes[fb.Head():], opts)
-	if err == errNoLocalVnode {
-		return s.transport.DeleteInode(vn.Host, inode, opts)
+	if err != nil {
+		if err == ErrNotLeader {
+			return s.transport.DeleteInode(vn.Host, inode, opts)
+		} else if err.Error() == "previous hash" {
+			log.Println("TODO: check", string(inode.Id))
+		}
 	}
-	return vn, err
+
+	return vn, nil
 }
 
 // SetInode takes the given inode, creates a set tx and submits it based on the
@@ -291,23 +319,25 @@ func (s *Difuse) SetInode(inode *store.Inode, options *RequestOptions) (*chord.V
 	fb.Finish(inode.Serialize(fb))
 
 	/*lvn, err := s.appendTx(store.TxTypeSet, inode.Id, fb.Bytes[fb.Head():], opts)
-		if err == ErrNotLeader {
-			//  Redirect to leader
-			return s.transport.SetInode(lvn.Host, inode, opts)
-		}
-	    return lvn, err
-	*/
+	if err == ErrNotLeader {
+		//  Redirect to leader
+		return s.transport.SetInode(lvn.Host, inode, opts)
+	}
+	return lvn, err*/
 
 	vn, err := s.proposeTx(store.TxTypeSet, inode.Id, fb.Bytes[fb.Head():], opts)
-	if err == errNoLocalVnode {
-		return s.transport.SetInode(vn.Host, inode, opts)
-	} else if err == txlog.ErrPrevHash {
-		log.Println("TODO: check", string(inode.Id))
+	if err != nil {
+		if err == ErrNotLeader {
+			return s.transport.SetInode(vn.Host, inode, opts)
+		} else if err.Error() == "previous hash" {
+			log.Println("TODO: check", string(inode.Id))
+		}
 	}
-	return vn, err
+
+	return vn, nil
 }
 
-func (s *Difuse) statLocal(key []byte, opts *RequestOptions, vns []*chord.Vnode) (*store.Inode, *ResponseMeta, error) {
+/*func (s *Difuse) statLocal(key []byte, opts *RequestOptions, vns []*chord.Vnode) (*store.Inode, *ResponseMeta, error) {
 
 	resp, err := s.transport.Stat(key, opts, vns...)
 	if err != nil {
@@ -328,7 +358,7 @@ func (s *Difuse) statLocal(key []byte, opts *RequestOptions, vns []*chord.Vnode)
 		}
 	}
 	return nil, rmeta, err
-}
+}*/
 
 func parseStatResponse(resp []*VnodeResponse, vns []*chord.Vnode) (*store.Inode, *ResponseMeta, error) {
 	var (
@@ -548,6 +578,11 @@ func (s *Difuse) LookupLeader(key []byte) (*chord.Vnode, []*chord.Vnode, map[str
 		return nil, nil, nil, err
 	}
 
-	l, vm, err := s.keyleader(key, vs)
-	return l, vs, vm, err
+	return vs[0], vs, vnodesByHost(vs), nil
+	//l, vm, err := s.keyleader(key, vs)
+	//return l, vs, vm, err
+}
+
+func (s *Difuse) isLocalVnode(vn *chord.Vnode) bool {
+	return s.config.Chord.Hostname == vn.Host
 }

@@ -162,3 +162,10 @@ func ShortVnodeID(vn *chord.Vnode) string {
 	}
 	return fmt.Sprintf("%s/%x", vn.Host, vn.Id[:8])
 }
+
+func LongVnodeID(vn *chord.Vnode) string {
+	if vn == nil {
+		return "<nil>/<nil>"
+	}
+	return fmt.Sprintf("%s/%x", vn.Host, vn.Id)
+}

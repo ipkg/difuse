@@ -1,6 +1,7 @@
 package txlog
 
 import (
+	"fmt"
 	"sort"
 	"sync"
 
@@ -9,6 +10,11 @@ import (
 
 // TxStore persists transactions to data store.
 type TxStore interface {
+	// New creates a new key with no tx's
+	New(key []byte) error
+	// Get key for the tx.  This is the object encompassing the tx's for a key.
+	GetKey(key []byte) (*TxKey, error)
+
 	Get(key []byte, txhash []byte) (*Tx, error)
 	//First(key []byte) (*Tx, error)
 	Last(key []byte) (*Tx, error)
@@ -20,9 +26,14 @@ type TxStore interface {
 	Transactions(key, seek []byte) (TxSlice, error)
 	// Add a transaction to the store.
 	Add(tx *Tx) error
+
+	// Atomically return the mode
+	Mode(key []byte) (KeyMode, error)
+	// Atomically sets the key mode
+	SetMode(key []byte, mode KeyMode) error
 	// Iterate over each key - calling f on each key with the key and transaction
 	// slice.
-	Iter(f func([]byte, *KeyTransactions) error) error
+	Iter(f func(kt *KeyTransactions) error) error
 }
 
 // MemTxStore stores the transaction log
@@ -38,12 +49,49 @@ func NewMemTxStore() *MemTxStore {
 	}
 }
 
+// Mode return the mode for the key.
+func (mts *MemTxStore) Mode(key []byte) (KeyMode, error) {
+	mts.mu.RLock()
+	defer mts.mu.RUnlock()
+
+	if v, ok := mts.m[string(key)]; ok {
+		return v.txkey.Mode(), nil
+	}
+
+	return -1, ErrKeyNotFound
+}
+
+// SetMode sets the mode on a given key.
+func (mts *MemTxStore) SetMode(key []byte, m KeyMode) error {
+	mts.mu.Lock()
+	defer mts.mu.Unlock()
+
+	if v, ok := mts.m[string(key)]; ok {
+		return v.txkey.SetMode(m)
+	}
+
+	return ErrKeyNotFound
+}
+
+func (mts *MemTxStore) GetKey(key []byte) (*TxKey, error) {
+	mts.mu.RLock()
+	defer mts.mu.RUnlock()
+
+	if k, ok := mts.m[string(key)]; ok {
+		return k.txkey, nil
+	}
+	return nil, ErrKeyNotFound
+}
+
 // Iter iterates over key and associated transactions calling f
 // with the key and slice of transactions as arguments.
-func (mts *MemTxStore) Iter(f func(k []byte, kt *KeyTransactions) error) error {
+func (mts *MemTxStore) Iter(f func(*KeyTransactions) error) error {
+	//mts.mu.RLock()
+	//defer mts.mu.RUnlock()
+
 	var err error
-	for k, v := range mts.m {
-		if e := f([]byte(k), v); e != nil {
+	for _, v := range mts.m {
+		if e := f(v); e != nil {
 			err = e
 		}
 	}
@@ -56,7 +104,7 @@ func (mts *MemTxStore) Last(key []byte) (*Tx, error) {
 	defer mts.mu.RUnlock()
 
 	if txs, ok := mts.m[string(key)]; ok {
-		if t := txs.txs.Last(); t != nil {
+		if t := txs.Last(); t != nil {
 			return t, nil
 		}
 	}
@@ -75,7 +123,7 @@ func (mts *MemTxStore) MerkleRoot(key []byte) ([]byte, error) {
 		return mts.storeMerkleRoot()
 	} else if v, ok := mts.m[string(key)]; ok {
 		// Return merkle root for the given key
-		return v.Root(), nil
+		return v.txkey.MerkleRoot(), nil
 	}
 
 	return nil, ErrKeyNotFound
@@ -95,21 +143,41 @@ func (mts *MemTxStore) Transactions(key, seek []byte) (TxSlice, error) {
 	return v.Transactions(seek)
 }
 
-// Add adds a transaction to the transaction store.
+// New creates a new key in the tx store that is offline
+func (mts *MemTxStore) New(key []byte) error {
+	mts.mu.Lock()
+	defer mts.mu.Unlock()
+
+	k := string(key)
+
+	if _, ok := mts.m[k]; ok {
+		return fmt.Errorf("key already exists")
+	}
+
+	kt := NewKeyTransactions(key)
+	kt.txkey.SetMode(OfflineKeyMode)
+	mts.m[k] = kt
+	return nil
+}
+
+// Add adds a transaction to the transaction store. If the key doesnt exist
+// it will be created.
 func (mts *MemTxStore) Add(tx *Tx) error {
 	mts.mu.Lock()
 	defer mts.mu.Unlock()
 
-	txs, ok := mts.m[string(tx.Key)]
+	k := string(tx.Key)
+
+	txs, ok := mts.m[k]
 	if !ok {
-		txs = NewKeyTransactions()
+		txs = NewKeyTransactions(tx.Key)
 	}
 
 	if err := txs.AddTx(tx); err != nil {
 		return err
 	}
 
-	mts.m[string(tx.Key)] = txs
+	mts.m[k] = txs
 	return nil
 }
 
@@ -119,14 +187,14 @@ func (mts *MemTxStore) Get(key []byte, txhash []byte) (*Tx, error) {
 	defer mts.mu.RUnlock()
 
 	if txs, ok := mts.m[string(key)]; ok {
-		for _, tx := range txs.txs {
+		for _, tx := range txs.TxSlice {
 			if EqualBytes(tx.Hash(), txhash) {
 				return tx, nil
 			}
 		}
 	}
 
-	return nil, ErrNotFound
+	return nil, ErrTxNotFound
 }
 
 func (mts *MemTxStore) keysMerkleTree() (*merkle.Tree, error) {
@@ -161,7 +229,7 @@ func (mts *MemTxStore) storeMerkleRoot() ([]byte, error) {
 	mrs := make([][]byte, klen)
 	for i, k := range keys {
 		var err error
-		if mrs[i], err = mts.m[k].txs.MerkleRoot(); err != nil {
+		if mrs[i], err = mts.m[k].MerkleRoot(); err != nil {
 			return nil, err
 		}
 	}

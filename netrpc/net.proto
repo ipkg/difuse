@@ -5,6 +5,8 @@ package netrpc;
 import "github.com/ipkg/go-chord/net.proto";
 
 service DifuseRPC {
+    rpc GetTxKeyServe(chord.Payload) returns (chord.Payload) {}
+
     rpc GetTxServe(chord.Payload) returns (chord.Payload) {}
     rpc AppendTxServe(chord.Payload) returns (chord.Payload) {}
     rpc ProposeTxServe(chord.Payload) returns (chord.Payload) {}

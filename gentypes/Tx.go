@@ -172,8 +172,20 @@ func (rcv *Tx) DataBytes() []byte {
 	return nil
 }
 
+func (rcv *Tx) Timestamp() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Tx) MutateTimestamp(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(16, n)
+}
+
 func TxStart(builder *flatbuffers.Builder) {
-	builder.StartObject(6)
+	builder.StartObject(7)
 }
 func TxAddKey(builder *flatbuffers.Builder, Key flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(Key), 0)
@@ -210,6 +222,9 @@ func TxAddData(builder *flatbuffers.Builder, Data flatbuffers.UOffsetT) {
 }
 func TxStartDataVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
+}
+func TxAddTimestamp(builder *flatbuffers.Builder, Timestamp uint64) {
+	builder.PrependUint64Slot(6, Timestamp, 0)
 }
 func TxEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

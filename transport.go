@@ -144,18 +144,18 @@ func (lt *localTransport) GetTx(key, txhash []byte, options *RequestOptions, vl 
 	return lt.remote.GetTx(key, txhash, options, vl...)
 }
 
-func (lt *localTransport) LastTx(key []byte, options *RequestOptions, vl ...*chord.Vnode) ([]*VnodeResponse, error) {
-	if vl[0].Host == lt.host {
-		return lt.local.LastTx(key, options, vl...)
+func (lt *localTransport) LastTx(vn *chord.Vnode, key []byte) (*txlog.Tx, error) {
+	if vn.Host == lt.host {
+		return lt.local.LastTx(vn, key)
 	}
-	return lt.remote.LastTx(key, options, vl...)
+	return lt.remote.LastTx(vn, key)
 }
 
-func (lt *localTransport) MerkleRootTx(key []byte, options *RequestOptions, vl ...*chord.Vnode) ([]*VnodeResponse, error) {
-	if vl[0].Host == lt.host {
-		return lt.local.MerkleRootTx(key, options, vl...)
+func (lt *localTransport) MerkleRootTx(vn *chord.Vnode, key []byte) ([]byte, error) {
+	if vn.Host == lt.host {
+		return lt.local.MerkleRootTx(vn, key)
 	}
-	return lt.remote.MerkleRootTx(key, options, vl...)
+	return lt.remote.MerkleRootTx(vn, key)
 }
 
 func (lt *localTransport) NewTx(key []byte, vl ...*chord.Vnode) ([]*VnodeResponse, error) {
@@ -163,6 +163,13 @@ func (lt *localTransport) NewTx(key []byte, vl ...*chord.Vnode) ([]*VnodeRespons
 		return lt.local.NewTx(key, vl...)
 	}
 	return lt.remote.NewTx(key, vl...)
+}
+
+func (lt *localTransport) GetTxKey(vn *chord.Vnode, key []byte) (*txlog.TxKey, error) {
+	if vn.Host == lt.host {
+		return lt.local.GetTxKey(vn, key)
+	}
+	return lt.remote.GetTxKey(vn, key)
 }
 
 func (lt *localTransport) TransferKeys(src, dst *chord.Vnode) error {

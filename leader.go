@@ -1,17 +1,8 @@
 package difuse
 
-import (
-	"fmt"
+//import chord "github.com/ipkg/go-chord"
 
-	chord "github.com/ipkg/go-chord"
-)
-
-// isLeader returns whether this host owns the provided vnode
-func (s *Difuse) isLeader(vn *chord.Vnode) bool {
-	return s.config.Chord.Hostname == vn.Host
-}
-
-func (s *Difuse) keyleader(key []byte, vs []*chord.Vnode) (lvn *chord.Vnode, vm map[string][]*chord.Vnode, err error) {
+/*func (s *Difuse) keyleader(key []byte, vs []*chord.Vnode) (lvn *chord.Vnode, vm map[string][]*chord.Vnode, err error) {
 	vm = vnodesByHost(vs)
 
 	//quorum := (len(vs) / 2) + 1
@@ -21,9 +12,6 @@ func (s *Difuse) keyleader(key []byte, vs []*chord.Vnode) (lvn *chord.Vnode, vm 
 	// Get the last tx for the first n vnodes satisfying quorum.  Traverse input
 	// vnode slice to maintain order
 	for _, vn := range vs {
-		/*if i > quorum {
-			break
-		}*/
 
 		// Already visited this host and all of its vnoes
 		if _, ok := lm[vn.Host]; ok {
@@ -81,3 +69,4 @@ func (s *Difuse) keyleader(key []byte, vs []*chord.Vnode) (lvn *chord.Vnode, vm 
 	err = fmt.Errorf("could not find leader vnode: %s", key)
 	return
 }
+*/

@@ -40,9 +40,25 @@ func NewMemLoggedStore(vn *chord.Vnode, kp txlog.Signator, trans txlog.Transport
 	return mls
 }
 
+// TxLog returns the transaction log for this store.
 func (mem *MemLoggedStore) TxLog() *txlog.TxLog {
 	return mem.txl
 }
+
+// Vnode returns the vnode this store is attached to.
+func (mem *MemLoggedStore) Vnode() *chord.Vnode {
+	return mem.vn
+}
+
+// EnableTakeOverMode puts the store in take-over mode i.e. it is in the process
+// of taking ownership of keys from another vnode.
+/*func (mem *MemLoggedStore) EnableTakeOverMode(m bool) {
+	if m {
+		atomic.StoreInt32(&mem.takeOverMode, 1)
+	} else {
+		atomic.StoreInt32(&mem.takeOverMode, 0)
+	}
+}*/
 
 /*func NewMemLoggedStoreWithTxLog(dstore *MemDataStore, txstore txlog.TxStore, txl *txlog.TxLog) *MemLoggedStore {
 	mls := &MemLoggedStore{
@@ -56,17 +72,69 @@ func (mem *MemLoggedStore) TxLog() *txlog.TxLog {
 	return mls
 }*/
 
-// Vnode returns the vnode this store is attached to.
-func (mem *MemLoggedStore) Vnode() *chord.Vnode {
-	return mem.vn
+func (mem *MemLoggedStore) Mode(key []byte) (txlog.KeyMode, error) {
+	return mem.txstore.Mode(key)
+}
+
+// SetMode sets the mode on a key on the tx log
+func (mem *MemLoggedStore) SetMode(key []byte, mode txlog.KeyMode) error {
+	return mem.txstore.SetMode(key, mode)
+}
+
+func (mem *MemLoggedStore) GetTxKey(key []byte) (*txlog.TxKey, error) {
+	return mem.txstore.GetKey(key)
+}
+
+// MerkleRootTx returns the merkle root of all transactions for a given key
+func (mem *MemLoggedStore) MerkleRootTx(key []byte) ([]byte, error) {
+	return mem.txstore.MerkleRoot(key)
+}
+
+// Transactions returns all transactions for a key from the given seek point
+func (mem *MemLoggedStore) Transactions(key, seek []byte) (txlog.TxSlice, error) {
+	return mem.txstore.Transactions(key, seek)
+}
+
+// GetTx gets a transaction from the store
+func (mem *MemLoggedStore) GetTx(key, txhash []byte) (*txlog.Tx, error) {
+	return mem.txstore.Get(key, txhash)
+}
+
+// IterTx iterates over all transactions in the store.
+func (mem *MemLoggedStore) IterTx(f func(*txlog.KeyTransactions) error) error {
+	return mem.txstore.Iter(f)
+}
+
+// AppendTx appends/queues a transaction to the log
+func (mem *MemLoggedStore) AppendTx(tx *txlog.Tx) error {
+	return mem.txl.AppendTx(tx)
+}
+
+// ProposeTx proposes a new transaction to the network.  This tx goes through
+// the voting process before being accepted
+func (mem *MemLoggedStore) ProposeTx(tx *txlog.Tx) error {
+	return mem.txl.ProposeTx(tx)
+}
+
+// CreateTxKey creates a new key with no tx's.  This call results in an entry being created
+// in the store.  It returns an error if it already exists
+func (mem *MemLoggedStore) CreateTxKey(key []byte) error {
+	return mem.txstore.New(key)
+}
+
+// NewTx instantiates a new transaction based on the previous hash from the log.  The tx
+// is not yet persisted/commited.
+func (mem *MemLoggedStore) NewTx(key []byte) (*txlog.Tx, error) {
+	//if atomic.LoadInt32(&mem.takeOverMode) == 1 {
+	//	return nil, errInTakeOverMode
+	//}
+	return mem.txl.NewTx(key)
 }
 
 // Apply a given transaction to the stable store
 func (mem *MemLoggedStore) Apply(ktx *txlog.Tx) error {
 	txType := ktx.Data[0]
-
 	//log.Printf("Apply key='%s' vn=%s/%x type=%x size=%d", ktx.Key, mem.vn.Host, mem.vn.Id[:7], txType, len(ktx.Data[1:]))
-
 	switch txType {
 	case TxTypeSet:
 		return mem.applySetKey(ktx.Key, ktx.Data[1:])
@@ -116,39 +184,6 @@ func (mem *MemDataStore) applyDeleteKey(key []byte) error {
 	return nil
 }
 
-// MerkleRootTx returns the merkle root of all transactions for a given key
-func (mem *MemLoggedStore) MerkleRootTx(key []byte) ([]byte, error) {
-	return mem.txstore.MerkleRoot(key)
-}
-
-func (mem *MemLoggedStore) Transactions(key, seek []byte) (txlog.TxSlice, error) {
-	return mem.txstore.Transactions(key, seek)
-}
-
-// GetTx gets a transaction from the store
-func (mem *MemLoggedStore) GetTx(key, txhash []byte) (*txlog.Tx, error) {
-	return mem.txstore.Get(key, txhash)
-}
-
-// IterTx iterates over all transactions in the store.
-func (mem *MemLoggedStore) IterTx(f func([]byte, *txlog.KeyTransactions) error) error {
-	return mem.txstore.Iter(f)
-}
-
-// AppendTx appends/queues a transaction to the log
-func (mem *MemLoggedStore) AppendTx(tx *txlog.Tx) error {
-	return mem.txl.AppendTx(tx)
-}
-
-func (mem *MemLoggedStore) ProposeTx(tx *txlog.Tx) error {
-	return mem.txl.ProposeTx(tx)
-}
-
-// NewTx creates a new transaction based on the previous hash from the log
-func (mem *MemLoggedStore) NewTx(key []byte) (*txlog.Tx, error) {
-	return mem.txl.NewTx(key)
-}
-
 // LastTx returns the last transaction in the log.
 func (mem *MemLoggedStore) LastTx(key []byte) (*txlog.Tx, error) {
 	return mem.txl.LastTx(key)
@@ -190,18 +225,6 @@ func (ms *MemDataStore) IterInodes(f func([]byte, *Inode) error) error {
 	return err
 }
 
-// Stat returns the inode for the given key/id
-func (ms *MemDataStore) Stat(key []byte) (*Inode, error) {
-	k := string(key)
-
-	rk, ok := ms.txm[k]
-	if ok {
-		return rk, nil
-	}
-
-	return nil, errKeyNotFound
-}
-
 // IterBlocks iterates over all the blocks in the store.  This obtains a read-lock.
 func (ms *MemDataStore) IterBlocks(f func(k, v []byte) error) error {
 	var e error
@@ -223,6 +246,19 @@ func (ms *MemDataStore) IterBlocks(f func(k, v []byte) error) error {
 	return e
 }
 
+// Stat returns the inode for the given key/id
+func (ms *MemDataStore) Stat(key []byte) (*Inode, error) {
+	k := string(key)
+
+	rk, ok := ms.txm[k]
+	if ok {
+		return rk, nil
+	}
+
+	return nil, errKeyNotFound
+}
+
+// InodeCount returns the number of inodes in the store.
 func (ms *MemDataStore) InodeCount() int64 {
 	ms.tlock.RLock()
 	defer ms.tlock.RUnlock()
@@ -230,6 +266,7 @@ func (ms *MemDataStore) InodeCount() int64 {
 	return int64(len(ms.txm))
 }
 
+// BlockCount returns the number of blocks in the store.
 func (ms *MemDataStore) BlockCount() int64 {
 	ms.clock.RLock()
 	defer ms.clock.RUnlock()

@@ -50,7 +50,10 @@ func serializeIdRoot(fb *flatbuffers.Builder, id, root []byte) flatbuffers.UOffs
 	return gentypes.IdRootEnd(fb)
 }
 
-func serializeVnodeIdsBytes(key []byte, vns []*chord.Vnode) []byte {
+func serializeVnodeIdsBytes(key []byte, vns ...*chord.Vnode) []byte {
+	if len(vns) == 0 {
+		return nil
+	}
 	fb := flatbuffers.NewBuilder(0)
 
 	ofs := make([]flatbuffers.UOffsetT, len(vns))
@@ -254,6 +257,7 @@ func serializeTx(fb *flatbuffers.Builder, tx *txlog.Tx) flatbuffers.UOffsetT {
 	gentypes.TxAddDestination(fb, dp)
 	gentypes.TxAddData(fb, ddp)
 	gentypes.TxAddSignature(fb, ssp)
+	gentypes.TxAddTimestamp(fb, tx.Timestamp)
 	return gentypes.TxEnd(fb)
 }
 
@@ -328,6 +332,7 @@ func deserializeTx(tx *gentypes.Tx) *txlog.Tx {
 		Data:      tx.DataBytes(),
 		Signature: tx.SignatureBytes(),
 		TxHeader: &txlog.TxHeader{
+			Timestamp:   tx.Timestamp(),
 			PrevHash:    tx.PrevHashBytes(),
 			Source:      tx.SourceBytes(),
 			Destination: tx.DestinationBytes(),

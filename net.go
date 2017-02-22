@@ -93,7 +93,7 @@ func (t *NetTransport) Stat(key []byte, options *RequestOptions, vs ...*chord.Vn
 		return nil, err
 	}
 
-	data := serializeVnodeIdsBytes(key, vs)
+	data := serializeVnodeIdsBytes(key, vs...)
 	payload := &chord.Payload{Data: data}
 
 	resp, err := out.client.StatServe(context.Background(), payload)
@@ -114,7 +114,7 @@ func (t *NetTransport) SetBlock(blkdata []byte, options *RequestOptions, vs ...*
 		return nil, err
 	}
 
-	data := serializeVnodeIdsBytes(blkdata, vs)
+	data := serializeVnodeIdsBytes(blkdata, vs...)
 	payload := &chord.Payload{Data: data}
 
 	resp, err := out.client.SetBlockServe(context.Background(), payload)
@@ -133,7 +133,7 @@ func (t *NetTransport) GetBlock(key []byte, options *RequestOptions, vs ...*chor
 		return nil, err
 	}
 
-	data := serializeVnodeIdsBytes(key, vs)
+	data := serializeVnodeIdsBytes(key, vs...)
 	payload := &chord.Payload{Data: data}
 
 	resp, err := out.client.GetBlockServe(context.Background(), payload)
@@ -152,7 +152,7 @@ func (t *NetTransport) DeleteBlock(key []byte, options *RequestOptions, vs ...*c
 		return nil, err
 	}
 
-	data := serializeVnodeIdsBytes(key, vs)
+	data := serializeVnodeIdsBytes(key, vs...)
 	payload := &chord.Payload{Data: data}
 
 	resp, err := out.client.DeleteBlockServe(context.Background(), payload)
@@ -164,15 +164,36 @@ func (t *NetTransport) DeleteBlock(key []byte, options *RequestOptions, vs ...*c
 	return deserializeVnodeIdBytesErrList(resp.Data), nil
 }
 
-// MerkleRootTx requests the transaction merkle root for the key.
-func (t *NetTransport) MerkleRootTx(key []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error) {
-
-	out, err := t.getConn(vs[0].Host)
+func (t *NetTransport) GetTxKey(vn *chord.Vnode, key []byte) (*txlog.TxKey, error) {
+	out, err := t.getConn(vn.Host)
 	if err != nil {
 		return nil, err
 	}
 
-	data := serializeVnodeIdsBytes(key, vs)
+	data := serializeVnodeIdsBytes(key, vn)
+	payload := &chord.Payload{Data: data}
+
+	resp, err := out.client.GetTxKeyServe(context.Background(), payload)
+	if err != nil {
+		t.reapConn(out)
+		return nil, err
+	}
+
+	fbtk := gentypes.GetRootAsTxKey(resp.Data, 0)
+	var kt txlog.TxKey
+	kt.Deserialize(fbtk)
+	return &kt, nil
+}
+
+// MerkleRootTx requests the transaction merkle root for the key.
+func (t *NetTransport) MerkleRootTx(vn *chord.Vnode, key []byte) ([]byte, error) {
+
+	out, err := t.getConn(vn.Host)
+	if err != nil {
+		return nil, err
+	}
+
+	data := serializeVnodeIdsBytes(key, vn)
 	payload := &chord.Payload{Data: data}
 
 	resp, err := out.client.MerkleRootTxServe(context.Background(), payload)
@@ -181,7 +202,9 @@ func (t *NetTransport) MerkleRootTx(key []byte, options *RequestOptions, vs ...*
 		return nil, err
 	}
 
-	return deserializeVnodeIdBytesErrList(resp.Data), nil
+	//return deserializeVnodeIdBytesErrList(resp.Data), nil
+	fbbs := gentypes.GetRootAsByteSlice(resp.Data, 0)
+	return fbbs.BBytes(), nil
 }
 
 // AppendTx sends a append transaction request to all vnodes on a given host
@@ -284,13 +307,13 @@ func (t *NetTransport) GetTx(key, txhash []byte, options *RequestOptions, vs ...
 	return deserializeVnodeIdTxErrList(resp.Data), nil
 }
 
-func (t *NetTransport) LastTx(key []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error) {
-	out, err := t.getConn(vs[0].Host)
+func (t *NetTransport) LastTx(vn *chord.Vnode, key []byte) (*txlog.Tx, error) {
+	out, err := t.getConn(vn.Host)
 	if err != nil {
 		return nil, err
 	}
 
-	data := serializeVnodeIdsBytes(key, vs)
+	data := serializeVnodeIdsBytes(key, vn)
 	payload := &chord.Payload{Data: data}
 
 	resp, err := out.client.LastTxServe(context.Background(), payload)
@@ -299,7 +322,9 @@ func (t *NetTransport) LastTx(key []byte, options *RequestOptions, vs ...*chord.
 		return nil, err
 	}
 
-	return deserializeVnodeIdTxErrList(resp.Data), nil
+	fbtx := gentypes.GetRootAsTx(resp.Data, 0)
+	return deserializeTx(fbtx), nil
+	//return deserializeVnodeIdTxErrList(resp.Data), nil
 }
 
 // NewTx is a stub to satisfy the Transport interface as transactions cannot be created
@@ -345,9 +370,9 @@ func (t *NetTransport) TransferKeys(local, remote *chord.Vnode) error {
 		return err
 	}
 
-	if st.InodeCount() == 0 {
-		return nil
-	}
+	//if st.InodeCount() == 0 {
+	//	return nil
+	//}
 
 	// Get remote conn
 	out, err := t.getConn(remote.Host)
@@ -376,8 +401,12 @@ func (t *NetTransport) TransferKeys(local, remote *chord.Vnode) error {
 	// TODO:
 	// Send each key & last tx hash
 
+	// Send keys from view rather than tx log.
 	var cnt int
-	err = st.IterInodes(func(key []byte, inode *store.Inode) error {
+	//err = st.IterInodes(func(key []byte, inode *store.Inode) error {
+	err = st.IterTx(func(ktx *txlog.KeyTransactions) error {
+		key := ktx.Key()
+
 		fb.Reset()
 		fb.Finish(serializeByteSlice(fb, key))
 		//fb.Finish(serializeIdRoot(fb, key, inode.TxRoot()))
@@ -392,7 +421,7 @@ func (t *NetTransport) TransferKeys(local, remote *chord.Vnode) error {
 		return err
 	}
 
-	log.Printf("action=transfer entity=keys status=ok count=%d src=%s dst=%s", cnt, ShortVnodeID(local), ShortVnodeID(remote))
+	log.Printf("INF action=transfer entity=keys status=ok count=%d src=%s dst=%s", cnt, ShortVnodeID(local), ShortVnodeID(remote))
 
 	_, err = stream.CloseAndRecv()
 	return err
@@ -499,6 +528,18 @@ func (t *NetTransport) TransactionsServe(in *chord.Payload, stream netrpc.Difuse
 	return nil
 }
 
+func (t *NetTransport) GetTxKeyServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
+	vs, key := deserializeVnodeIdsBytes(in.Data)
+	tk, err := t.local.GetTxKey(vs[0], key)
+	if err != nil {
+		return nil, err
+	}
+
+	fb := flatbuffers.NewBuilder(0)
+	fb.Finish(tk.Serialize(fb))
+	return &chord.Payload{Data: fb.Bytes[fb.Head():]}, nil
+}
+
 // GetTxServe serves a GetTx request
 func (t *NetTransport) GetTxServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
 	vns, key, txhash := deserializeVnodeIdsTwoByteSlices(in.Data)
@@ -511,19 +552,28 @@ func (t *NetTransport) GetTxServe(ctx context.Context, in *chord.Payload) (*chor
 // LastTxServe serves a LastTx request
 func (t *NetTransport) LastTxServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
 	vns, k := deserializeVnodeIdsBytes(in.Data)
-	txs, _ := t.local.LastTx(k, nil, vns...)
+	tx, err := t.local.LastTx(vns[0], k)
+	if err != nil {
+		return nil, err
+	}
 
-	data := serializeVnodeIdTxErrList(txs)
-	return &chord.Payload{Data: data}, nil
+	fb := flatbuffers.NewBuilder(0)
+	fb.Finish(serializeTx(fb, tx))
+	return &chord.Payload{Data: fb.Bytes[fb.Head():]}, nil
 }
 
 // MerkleRootTxServe serves a MerkleRootTx requeset
 func (t *NetTransport) MerkleRootTxServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
 	vs, key := deserializeVnodeIdsBytes(in.Data)
-	rsps, _ := t.local.MerkleRootTx(key, nil, vs...)
+	mr, err := t.local.MerkleRootTx(vs[0], key)
+	if err != nil {
+		return nil, err
+	}
 
-	data := serializeVnodeIdBytesErrList(rsps)
-	return &chord.Payload{Data: data}, nil
+	fb := flatbuffers.NewBuilder(0)
+	fb.Finish(serializeByteSlice(fb, mr))
+
+	return &chord.Payload{Data: fb.Bytes[fb.Head():]}, nil
 }
 
 // AppendTxServe serves an AppendTx request
@@ -662,13 +712,20 @@ func (t *NetTransport) TransferKeysServe(stream netrpc.DifuseRPC_TransferKeysSer
 		return err
 	}
 
-	//fbvn := fbtypes.Getrootasst(req.Data, 0)
 	fbtr := gentypes.GetRootAsTransferRequest(req.Data, 0)
 	sv := fbtr.Src(nil)
 	dv := fbtr.Dst(nil)
 
 	src := &chord.Vnode{Id: sv.IdBytes(), Host: string(sv.Host())}
 	dst := &chord.Vnode{Id: dv.IdBytes(), Host: string(dv.Host())}
+
+	lst, err := t.local.GetStore(dst.Id)
+	if err != nil {
+		return err
+	}
+
+	// TODO: set dst store into transfer mode for the keys below.
+	//localSt.EnableTakeOverMode(true)
 
 	for {
 		payload, e := stream.Recv()
@@ -680,8 +737,21 @@ func (t *NetTransport) TransferKeysServe(stream netrpc.DifuseRPC_TransferKeysSer
 		}
 
 		bs := gentypes.GetRootAsByteSlice(payload.Data, 0)
+
+		// Create the key on the local store. will return an error if exists.
+		lst.CreateTxKey(bs.BBytes())
+
+		if e = lst.SetMode(bs.BBytes(), txlog.TakeoverKeyMode); e != nil {
+			log.Printf("ERR msg='%v'", e)
+			continue
+		}
+
 		t.transferq <- &ReplRequest{Dst: dst, Src: src, Key: bs.BBytes()}
+		//log.Printf("action=accept-transfer key=%s src=%s", bs.BBytes(), ShortVnodeID(src))
 	}
+
+	// TODO: unset transfer mode
+	//localSt.EnableTakeOverMode(false)
 
 	if err != nil {
 		return err

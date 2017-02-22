@@ -81,7 +81,7 @@ func TestTxStoreMerkle(t *testing.T) {
 	}
 
 	var cnt int
-	st2.Iter(func(k []byte, kt *KeyTransactions) error {
+	st2.Iter(func(kt *KeyTransactions) error {
 		cnt++
 		return nil
 	})

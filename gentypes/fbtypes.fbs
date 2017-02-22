@@ -38,6 +38,7 @@ table Tx {
     Destination: [ubyte];
     Signature: [ubyte];
     Data: [ubyte];
+    Timestamp: ulong;
 }
 
 table VnodeIdTxErr {
@@ -92,4 +93,11 @@ table TxRequest {
 table TransferRequest {
     Src: fbtypes.Vnode;
     Dst: fbtypes.Vnode;
+}
+
+table TxKey {
+    Key:[ubyte];    // key
+    Mode:int;       // key mode
+    Root:[ubyte];   // merkle root of tx's
+    Tx:[ByteSlice]; // tx id's
 }
