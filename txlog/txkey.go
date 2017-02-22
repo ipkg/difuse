@@ -3,16 +3,48 @@ package txlog
 import (
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/ipkg/difuse/gentypes"
 	merkle "github.com/ipkg/go-merkle"
 )
 
+// KeyMode represents states a key can have.
+type KeyMode int32
+
+func (k KeyMode) String() string {
+	switch k {
+	case NormalKeyMode:
+		return "normal"
+	case TransitionKeyMode:
+		return "transition"
+	case TakeoverKeyMode:
+		return "takeover"
+	case OfflineKeyMode:
+		return "offline"
+	}
+	return "unknown"
+}
+
+const (
+	// NormalKeyMode is the normal mode of operation
+	NormalKeyMode KeyMode = iota
+	// TransitionKeyMode is the key is being transferred by a vnode.  This is set on the vnode
+	// transitioning its keys to be taken over.
+	TransitionKeyMode
+	// TakeoverKeyMode is the key being taken-over by a vnode.  This mode is set on the vnode
+	// receiving the keys.
+	TakeoverKeyMode
+	// OfflineKeyMode denotes that a key is offline and not usable.  This is set if a key
+	// is not consistent.
+	OfflineKeyMode
+)
+
 type TxKey struct {
 	key []byte
 
-	mode KeyMode
+	mode int32
 	txs  [][]byte
 
 	// used when key is unstable.
@@ -22,7 +54,7 @@ type TxKey struct {
 func NewTxKey(key []byte) *TxKey {
 	return &TxKey{
 		key:  key,
-		mode: NormalKeyMode,
+		mode: int32(NormalKeyMode),
 		root: ZeroHash(),
 		txs:  make([][]byte, 0),
 	}
@@ -31,7 +63,7 @@ func NewTxKey(key []byte) *TxKey {
 func (t *TxKey) MarshalJSON() ([]byte, error) {
 	m := map[string]interface{}{
 		"key":  string(t.key),
-		"mode": t.mode.String(),
+		"mode": KeyMode(t.mode).String(),
 	}
 
 	s := make([]string, len(t.txs))
@@ -57,7 +89,12 @@ func (t *TxKey) AppendTx(id []byte) {
 
 // Mode returns the current mode of the key
 func (t *TxKey) Mode() KeyMode {
-	return t.mode
+	km := atomic.LoadInt32(&t.mode)
+	return KeyMode(km)
+}
+
+func (t *TxKey) Degraded() bool {
+	return !(t.Mode() == NormalKeyMode)
 }
 
 // SetMode sets the mode of the key
@@ -65,7 +102,8 @@ func (t *TxKey) SetMode(m KeyMode) (err error) {
 
 	switch m {
 	case NormalKeyMode, TransitionKeyMode, TakeoverKeyMode, OfflineKeyMode:
-		t.mode = m
+		im := int32(m)
+		atomic.StoreInt32(&t.mode, im)
 
 	default:
 		err = errUnknownMode
@@ -76,7 +114,7 @@ func (t *TxKey) SetMode(m KeyMode) (err error) {
 
 func (t *TxKey) Deserialize(obj *gentypes.TxKey) {
 	t.key = obj.KeyBytes()
-	t.mode = KeyMode(obj.Mode())
+	t.mode = obj.Mode()
 	t.root = obj.RootBytes()
 
 	l := obj.TxLength()
@@ -91,6 +129,7 @@ func (t *TxKey) Deserialize(obj *gentypes.TxKey) {
 	t.txs = bh
 }
 
+// Serialize serializes the txkey into the flatbuffer
 func (t *TxKey) Serialize(fb *flatbuffers.Builder) flatbuffers.UOffsetT {
 	obh := make([]flatbuffers.UOffsetT, len(t.txs))
 	for i, v := range t.txs {

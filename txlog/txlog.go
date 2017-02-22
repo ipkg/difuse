@@ -90,27 +90,6 @@ func NewTxLog(kp Signator, store TxStore, trans Transport, fsm FSM) *TxLog {
 	return txl
 }
 
-// NewTx get a new transaction. The transaction needs to be signed before it can be used.
-// If the key is set to takeover or offline mode it will return an error.
-func (txl *TxLog) NewTx(key []byte) (*Tx, error) {
-	// Check store to make sure key is usable
-	if kt, err := txl.store.GetKey(key); err == nil {
-		m := kt.Mode()
-		if m == TakeoverKeyMode || m == OfflineKeyMode {
-			return nil, fmt.Errorf("key in takeover/offline mode")
-		}
-	}
-
-	// Get last tx from log.
-	lktx, _ := txl.LastTx(key)
-	if lktx == nil {
-		// Create a new key with the prev hash set to zero.
-		return NewTx(key, ZeroHash(), nil), nil
-	}
-
-	return NewTx(key, lktx.Hash(), nil), nil
-}
-
 // LastTx returns the last transaction for a given key in the log.  The transaction
 // may be retreived from the stable store if currently not in the queue.
 func (txl *TxLog) LastTx(key []byte) (*Tx, error) {
@@ -124,32 +103,31 @@ func (txl *TxLog) LastTx(key []byte) (*Tx, error) {
 	return txl.store.Last(key)
 }
 
-func (txl *TxLog) verifyTx(ktx *Tx) error {
-
-	if err := ktx.VerifySignature(txl.kp); err != nil {
-		return err
+// NewTx get a new transaction. The transaction needs to be signed before it can be used.
+// If the key is set to takeover or offline mode it will return an error.
+func (txl *TxLog) NewTx(key []byte) (*Tx, error) {
+	// Check store to make sure key is usable
+	if kt, err := txl.store.GetKey(key); err == nil {
+		//m := kt.Mode()
+		//if m == TakeoverKeyMode || m == OfflineKeyMode {
+		if kt.Degraded() {
+			return nil, fmt.Errorf("key degraded")
+		}
+		//}
 	}
 
-	ltx, _ := txl.LastTx(ktx.Key)
-	if ltx != nil {
-		lh := ltx.Hash()
-		if !EqualBytes(lh, ktx.PrevHash) {
-			//log.Printf(errPrevHash, ktx.Key, ltx.Hash()[:8], ktx.PrevHash[:8])
-			return ErrPrevHash
-		}
-	} else {
-		// If last tx is not ound make sure this tx's previous hash is zero i.e
-		// the first tx for this key.
-		zh := ZeroHash()
-		if !EqualBytes(ktx.PrevHash, zh) {
-			//log.Printf(errPrevHash, ktx.Key, zh[:8], ktx.PrevHash[:8])
-			return ErrPrevHash
-		}
+	// Get last tx from log.
+	lktx, _ := txl.LastTx(key)
+	if lktx == nil {
+		// Create a new key with the prev hash set to zero.
+		return NewTx(key, ZeroHash(), nil), nil
 	}
-	return nil
+
+	return NewTx(key, lktx.Hash(), nil), nil
 }
 
-// AppendTx to the log.  Verfiy the signature before submitting to the channel.
+// AppendTx appends a tx to the log.  This should most always not be used directly
+// as each tx needs to through the voting process.
 func (txl *TxLog) AppendTx(tx *Tx) error {
 	// Check if we have ktx in the our store.
 	_, err := txl.store.Get(tx.Key, tx.Hash())
@@ -168,6 +146,13 @@ func (txl *TxLog) AppendTx(tx *Tx) error {
 // to be appended to the log and remove any orphan tx's that have the prev hash of the tx
 // that was just accepted.
 func (txl *TxLog) ProposeTx(tx *Tx) error {
+	// Check store to make sure key is usable
+	if kt, err := txl.store.GetKey(tx.Key); err == nil {
+		if kt.Degraded() {
+			return fmt.Errorf("key degraded")
+		}
+	}
+
 	// Check if we have ktx in the our store.
 	_, err := txl.store.Get(tx.Key, tx.Hash())
 	if err == nil {
@@ -211,7 +196,7 @@ func (txl *TxLog) proposeTx(tx *Tx) error {
 	txl.orphans[txkey] = v
 
 	if len(v.TxSlice) == txl.reqvotes {
-		log.Printf("DBG action=elected tx=%x key=%s vnode=%x", tx.Hash()[:8], tx.Key, txl.fsm.Vnode().Id[:8])
+		//log.Printf("DBG action=elected tx=%x key=%s vnode=%x", tx.Hash()[:8], tx.Key, txl.fsm.Vnode().Id[:8])
 		return txl.queueTx(tx)
 	}
 
@@ -222,7 +207,6 @@ func (txl *TxLog) checkPrevHash(ktx *Tx) error {
 	if ltx, _ := txl.LastTx(ktx.Key); ltx != nil {
 		lh := ltx.Hash()
 		if !EqualBytes(lh, ktx.PrevHash) {
-			//log.Printf(errPrevHash, ktx.Key, ltx.Hash()[:8], ktx.PrevHash[:8])
 			return ErrPrevHash
 		}
 	} else {
@@ -230,12 +214,34 @@ func (txl *TxLog) checkPrevHash(ktx *Tx) error {
 		// the first tx for this key.
 		zh := ZeroHash()
 		if !EqualBytes(ktx.PrevHash, zh) {
-			//log.Printf(errPrevHash, ktx.Key, zh[:8], ktx.PrevHash[:8])
 			return ErrPrevHash
 		}
 	}
 	return nil
 }
+
+/*func (txl *TxLog) verifyTx(ktx *Tx) error {
+
+	if err := ktx.VerifySignature(txl.kp); err != nil {
+		return err
+	}
+
+	ltx, _ := txl.LastTx(ktx.Key)
+	if ltx != nil {
+		lh := ltx.Hash()
+		if !EqualBytes(lh, ktx.PrevHash) {
+			return ErrPrevHash
+		}
+	} else {
+		// If last tx is not ound make sure this tx's previous hash is zero i.e
+		// the first tx for this key.
+		zh := ZeroHash()
+		if !EqualBytes(ktx.PrevHash, zh) {
+			return ErrPrevHash
+		}
+	}
+	return nil
+}*/
 
 // Queue tx for fsm to apply
 func (txl *TxLog) queueTx(ktx *Tx) error {
@@ -284,8 +290,8 @@ func (txl *TxLog) reapOrphansOnce() {
 
 	for k, v := range txl.orphans {
 		if idle := n - v.lastSeen; idle >= 15 {
-			t := v.First()
-			log.Printf("DBG vnode=%x action=reaped tx=%x key=%s votes=%d", txl.fsm.Vnode().Id[:8], t.Hash()[:8], t.Key, len(v.TxSlice))
+			//t := v.First()
+			//log.Printf("DBG vnode=%x action=reaped tx=%x key=%s votes=%d", txl.fsm.Vnode().Id[:8], t.Hash()[:8], t.Key, len(v.TxSlice))
 			delete(txl.orphans, k)
 		}
 	}

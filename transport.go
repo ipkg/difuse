@@ -116,32 +116,18 @@ func (lt *localTransport) ProposeTx(tx *txlog.Tx, options *RequestOptions, vl ..
 	return lt.remote.ProposeTx(tx, options, vl...)
 }
 
-/*// ReplicateTransactions replicates transactions from remote to local.  If remote is a local vnode then
-// then replication is assumed to be among two local vnodes.
-func (lt *localTransport) ReplicateTransactions(key, seek []byte, src, dst *chord.Vnode) error {
-	if src.Host != lt.host && dst.Host != lt.host {
-		return fmt.Errorf("remote to remote replication")
-	} else if src.Host == lt.host && dst.Host == lt.host {
-		return lt.local.ReplicateTransactions(key, seek, src, dst)
-	} else if src.Host != lt.host {
-		return lt.remote.ReplicateTransactions(key, seek, src, dst)
-	} else {
-		return lt.remote.ReplicateTransactions(key, seek, dst, src)
+func (lt *localTransport) Transactions(vn *chord.Vnode, key, seek []byte) (txlog.TxSlice, error) {
+	if vn.Host == lt.host {
+		return lt.local.Transactions(vn, key, seek)
 	}
-}*/
-
-func (lt *localTransport) Transactions(key, seek []byte, vl ...*chord.Vnode) (txlog.TxSlice, error) {
-	if vl[0].Host == lt.host {
-		return lt.local.Transactions(key, seek, vl...)
-	}
-	return lt.remote.Transactions(key, seek, vl...)
+	return lt.remote.Transactions(vn, key, seek)
 }
 
-func (lt *localTransport) GetTx(key, txhash []byte, options *RequestOptions, vl ...*chord.Vnode) ([]*VnodeResponse, error) {
-	if vl[0].Host == lt.host {
-		return lt.local.GetTx(key, txhash, options, vl...)
+func (lt *localTransport) GetTx(vn *chord.Vnode, key, txhash []byte) (*txlog.Tx, error) {
+	if vn.Host == lt.host {
+		return lt.local.GetTx(vn, key, txhash)
 	}
-	return lt.remote.GetTx(key, txhash, options, vl...)
+	return lt.remote.GetTx(vn, key, txhash)
 }
 
 func (lt *localTransport) LastTx(vn *chord.Vnode, key []byte) (*txlog.Tx, error) {
@@ -172,8 +158,15 @@ func (lt *localTransport) GetTxKey(vn *chord.Vnode, key []byte) (*txlog.TxKey, e
 	return lt.remote.GetTxKey(vn, key)
 }
 
-func (lt *localTransport) TransferKeys(src, dst *chord.Vnode) error {
-	return lt.remote.TransferKeys(src, dst)
+func (lt *localTransport) SetMode(vn *chord.Vnode, key []byte, mode txlog.KeyMode) error {
+	if vn.Host == lt.host {
+		return lt.local.SetMode(vn, key, mode)
+	}
+	return lt.remote.SetModeTxKey(vn, key, mode)
+}
+
+func (lt *localTransport) TransferTxKeys(src, dst *chord.Vnode) error {
+	return lt.remote.TransferTxKeys(src, dst)
 }
 
 // set request for remote on leader
@@ -199,4 +192,45 @@ func (lt *localTransport) RegisterVnode(vn *chord.Vnode, vs VnodeStore) {
 func (lt *localTransport) Register(cs ConsistentStore) {
 	lt.cs = cs
 	lt.remote.Register(cs)
+}
+
+type consistentTransport struct {
+	ring      *chord.Ring
+	transport Transport
+}
+
+func (c *consistentTransport) LastTx(key []byte, opts RequestOptions) (*txlog.Tx, error) {
+	_, vs, err := c.ring.Lookup(opts.NetSize, key)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, vn := range vs {
+		tx, er := c.transport.LastTx(vn, key)
+		if er != nil {
+			err = er
+			continue
+		}
+		return tx, nil
+	}
+
+	return nil, err
+}
+
+func (c *consistentTransport) GetTx(key, txhash []byte, opts RequestOptions) (*txlog.Tx, error) {
+	_, vs, err := c.ring.Lookup(opts.NetSize, key)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, vn := range vs {
+		tx, er := c.transport.GetTx(vn, key, txhash)
+		if er != nil {
+			err = er
+			continue
+		}
+		return tx, nil
+	}
+
+	return nil, err
 }

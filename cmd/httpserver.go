@@ -125,7 +125,9 @@ func (hs *httpServer) handleData(w http.ResponseWriter, r *http.Request) (interf
 	}
 
 	w.Header().Set(headerResponseTime, fmt.Sprintf("%fms", rtime))
-	w.Header().Set(headerVnode, difuse.ShortVnodeID(meta.Vnode))
+	if meta != nil {
+		w.Header().Set(headerVnode, difuse.ShortVnodeID(meta.Vnode))
+	}
 
 	return data, err
 }

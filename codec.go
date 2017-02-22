@@ -210,7 +210,7 @@ func serializeVnodeIdTxErrList(vnds []*VnodeResponse) []byte {
 	return fb.Bytes[fb.Head():]
 }
 
-func serializeVnodeIdsTwoByteSlices(b1, b2 []byte, vns []*chord.Vnode) []byte {
+func serializeVnodeIdsTwoByteSlices(b1, b2 []byte, vns ...*chord.Vnode) []byte {
 	fb := flatbuffers.NewBuilder(0)
 
 	ofs := make([]flatbuffers.UOffsetT, len(vns))

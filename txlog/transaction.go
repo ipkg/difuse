@@ -1,35 +1,5 @@
 package txlog
 
-type KeyMode int32
-
-func (k KeyMode) String() string {
-	switch k {
-	case NormalKeyMode:
-		return "normal"
-	case TransitionKeyMode:
-		return "transition"
-	case TakeoverKeyMode:
-		return "takeover"
-	case OfflineKeyMode:
-		return "offline"
-	}
-	return "unknown"
-}
-
-const (
-	// NormalKeyMode is the normal mode of operation
-	NormalKeyMode KeyMode = iota
-	// TransitionKeyMode is the key is being transferred by a vnode.  This is set on the vnode
-	// transitioning its keys to be taken over.
-	TransitionKeyMode
-	// TakeoverKeyMode is the key being taken-over by a vnode.  This mode is set on the vnode
-	// receiving the keys.
-	TakeoverKeyMode
-	// OfflineKeyMode denotes that a key is offline and not usable.  This is set if a key
-	// is not consistent.
-	OfflineKeyMode
-)
-
 // KeyTransactions holds all transactions for a given key
 type KeyTransactions struct {
 	txkey *TxKey
@@ -42,6 +12,10 @@ func NewKeyTransactions(key []byte) *KeyTransactions {
 		txkey:   NewTxKey(key),
 		TxSlice: TxSlice{},
 	}
+}
+
+func (k *KeyTransactions) SetMode(m KeyMode) error {
+	return k.txkey.SetMode(m)
 }
 
 func (k *KeyTransactions) Key() []byte {

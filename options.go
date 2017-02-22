@@ -23,6 +23,7 @@ const (
 // RequestOptions for a given operation.
 type RequestOptions struct {
 	Consistency ConsistencyLevel
+	NetSize     int // The number of peers to use for the operation.
 }
 
 // ReplRequest is a replication request.  It contains the source to destination vnode

@@ -193,19 +193,9 @@ func TestNetTransportTx(t *testing.T) {
 	}
 
 	<-time.After(300 * time.Millisecond)
-	resp, err = nt1.GetTx([]byte("key"), tx.Hash(), nil, vs...)
+	_, err = nt1.GetTx(vs[0], []byte("key"), tx.Hash())
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	for _, r := range resp {
-		if r.Err != nil {
-			t.Error(r.Err)
-		}
-	}
-
-	if len(resp) != 2 {
-		t.Fatalf("result size mismatch")
 	}
 
 	rtx, err := nt1.LastTx(vn1, []byte("key"))
@@ -246,7 +236,7 @@ func TestNetTransportTx(t *testing.T) {
 		}
 	}
 
-	if err = nt1.TransferKeys(vn1, vn3); err != nil {
+	if err = nt1.TransferTxKeys(vn1, vn3); err != nil {
 		t.Fatal(err)
 	}
 

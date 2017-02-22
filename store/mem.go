@@ -50,16 +50,6 @@ func (mem *MemLoggedStore) Vnode() *chord.Vnode {
 	return mem.vn
 }
 
-// EnableTakeOverMode puts the store in take-over mode i.e. it is in the process
-// of taking ownership of keys from another vnode.
-/*func (mem *MemLoggedStore) EnableTakeOverMode(m bool) {
-	if m {
-		atomic.StoreInt32(&mem.takeOverMode, 1)
-	} else {
-		atomic.StoreInt32(&mem.takeOverMode, 0)
-	}
-}*/
-
 /*func NewMemLoggedStoreWithTxLog(dstore *MemDataStore, txstore txlog.TxStore, txl *txlog.TxLog) *MemLoggedStore {
 	mls := &MemLoggedStore{
 		MemDataStore: dstore,
@@ -125,16 +115,13 @@ func (mem *MemLoggedStore) CreateTxKey(key []byte) error {
 // NewTx instantiates a new transaction based on the previous hash from the log.  The tx
 // is not yet persisted/commited.
 func (mem *MemLoggedStore) NewTx(key []byte) (*txlog.Tx, error) {
-	//if atomic.LoadInt32(&mem.takeOverMode) == 1 {
-	//	return nil, errInTakeOverMode
-	//}
 	return mem.txl.NewTx(key)
 }
 
 // Apply a given transaction to the stable store
 func (mem *MemLoggedStore) Apply(ktx *txlog.Tx) error {
 	txType := ktx.Data[0]
-	//log.Printf("Apply key='%s' vn=%s/%x type=%x size=%d", ktx.Key, mem.vn.Host, mem.vn.Id[:7], txType, len(ktx.Data[1:]))
+
 	switch txType {
 	case TxTypeSet:
 		return mem.applySetKey(ktx.Key, ktx.Data[1:])

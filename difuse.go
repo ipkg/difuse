@@ -49,8 +49,9 @@ type VnodeStore interface {
 	// nil or a zero-hash, all transactions are returned.
 	Transactions(key, seek []byte) (txlog.TxSlice, error)
 
-	// SetMode
+	// SetMode sets the key to the specified mode
 	SetMode(key []byte, mode txlog.KeyMode) error
+	// Returns the mode of the key
 	Mode(key []byte) (txlog.KeyMode, error)
 
 	// Iterate over all inodes in the store.
@@ -95,26 +96,26 @@ type Transport interface {
 
 	AppendTx(tx *txlog.Tx, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
 	ProposeTx(tx *txlog.Tx, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
-	GetTx(key, txhash []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error)
 
 	NewTx(key []byte, vs ...*chord.Vnode) ([]*VnodeResponse, error)
-	Transactions(key, seek []byte, vs ...*chord.Vnode) (txlog.TxSlice, error)
 
 	// Transfer keys from the local vnode to the remote one.
-	TransferKeys(src, dst *chord.Vnode) error
+	TransferTxKeys(src, dst *chord.Vnode) error
 
+	GetTx(vn *chord.Vnode, key, txhash []byte) (*txlog.Tx, error)
 	LastTx(vn *chord.Vnode, key []byte) (*txlog.Tx, error)
 	MerkleRootTx(vn *chord.Vnode, key []byte) ([]byte, error)
 	GetTxKey(vn *chord.Vnode, key []byte) (*txlog.TxKey, error)
-
+	SetModeTxKey(vn *chord.Vnode, key []byte, mode txlog.KeyMode) error
+	Transactions(vn *chord.Vnode, key, seek []byte) (txlog.TxSlice, error)
 	// Lookup the leader for the given key on the given host returning the leader, an ordered list of
 	// other vnodes as well as a host-to-vnode map.
 	LookupLeader(host string, key []byte) (*chord.Vnode, []*chord.Vnode, map[string][]*chord.Vnode, error)
 
 	// RegisterVnode registers a datastore for a vnode.
 	RegisterVnode(*chord.Vnode, VnodeStore)
-	Register(ConsistentStore)
 	RegisterTransferQ(chan<- *ReplRequest)
+	Register(ConsistentStore)
 }
 
 // ConsistentStore implements consistent store methods using the underlying ring methods.

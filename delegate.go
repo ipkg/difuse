@@ -32,7 +32,7 @@ func (s *Difuse) NewPredecessor(local, remoteNew, remotePrev *chord.Vnode) {
 	//	log.Printf("ERR msg='%v'", err)
 	//}
 
-	if err := s.transport.TransferKeys(local, remoteNew); err != nil {
+	if err := s.transport.TransferTxKeys(local, remoteNew); err != nil {
 		log.Printf("ERR action=transfer status=failed src=%s dst=%s msg='%v'", ShortVnodeID(local), ShortVnodeID(remoteNew), err)
 	}
 	//else {

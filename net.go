@@ -164,6 +164,20 @@ func (t *NetTransport) DeleteBlock(key []byte, options *RequestOptions, vs ...*c
 	return deserializeVnodeIdBytesErrList(resp.Data), nil
 }
 
+func (t *NetTransport) SetModeTxKey(vn *chord.Vnode, key []byte, mode txlog.KeyMode) error {
+	out, err := t.getConn(vn.Host)
+	if err != nil {
+		return err
+	}
+
+	payload := chord.SerializeVnodeIntBytesToPayload(vn, int(mode), key)
+	if _, err = out.client.SetModeTxKeyServe(context.Background(), payload); err != nil {
+		t.reapConn(out)
+		return err
+	}
+	return nil
+}
+
 func (t *NetTransport) GetTxKey(vn *chord.Vnode, key []byte) (*txlog.TxKey, error) {
 	out, err := t.getConn(vn.Host)
 	if err != nil {
@@ -246,20 +260,20 @@ func (t *NetTransport) ProposeTx(tx *txlog.Tx, options *RequestOptions, vs ...*c
 	return deserializeVnodeIdBytesErrList(resp.Data), nil
 }
 
-func (t *NetTransport) Transactions(key, seek []byte, vs ...*chord.Vnode) (txlog.TxSlice, error) {
+func (t *NetTransport) Transactions(vn *chord.Vnode, key, seek []byte) (txlog.TxSlice, error) {
 
 	/*st, err := t.local.GetStore(local.Id)
 	if err != nil {
 		return err
 	}*/
 
-	out, err := t.getConn(vs[0].Host)
+	out, err := t.getConn(vn.Host)
 	if err != nil {
 		return nil, err
 	}
 
 	fb := flatbuffers.NewBuilder(0)
-	fb.Finish(serializeTxRequest(fb, key, seek, vs[0]))
+	fb.Finish(serializeTxRequest(fb, key, seek, vn))
 
 	req := &chord.Payload{Data: fb.Bytes[fb.Head():]}
 	stream, err := out.client.TransactionsServe(context.Background(), req)
@@ -288,14 +302,14 @@ func (t *NetTransport) Transactions(key, seek []byte, vs ...*chord.Vnode) (txlog
 	//return deserializeTxListErr(resp.Data)
 }
 
-func (t *NetTransport) GetTx(key, txhash []byte, options *RequestOptions, vs ...*chord.Vnode) ([]*VnodeResponse, error) {
+func (t *NetTransport) GetTx(vn *chord.Vnode, key, txhash []byte) (*txlog.Tx, error) {
 
-	out, err := t.getConn(vs[0].Host)
+	out, err := t.getConn(vn.Host)
 	if err != nil {
 		return nil, err
 	}
 
-	data := serializeVnodeIdsTwoByteSlices(key, txhash, vs)
+	data := serializeVnodeIdsTwoByteSlices(key, txhash, vn)
 	payload := &chord.Payload{Data: data}
 
 	resp, err := out.client.GetTxServe(context.Background(), payload)
@@ -304,7 +318,9 @@ func (t *NetTransport) GetTx(key, txhash []byte, options *RequestOptions, vs ...
 		return nil, err
 	}
 
-	return deserializeVnodeIdTxErrList(resp.Data), nil
+	fbtx := gentypes.GetRootAsTx(resp.Data, 0)
+	return deserializeTx(fbtx), nil
+	//return deserializeVnodeIdTxErrList(resp.Data), nil
 }
 
 func (t *NetTransport) LastTx(vn *chord.Vnode, key []byte) (*txlog.Tx, error) {
@@ -361,9 +377,9 @@ func (t *NetTransport) LookupLeader(host string, key []byte) (*chord.Vnode, []*c
 	return vl[0], vl[1:], vm, nil
 }
 
-// TransferKeys issues a transfer request of keys from the local to remote vnode.
+// TransferTxKeys issues a transfer request of keys from the local to remote vnode.
 // This queues a per key replication process on the other end.
-func (t *NetTransport) TransferKeys(local, remote *chord.Vnode) error {
+func (t *NetTransport) TransferTxKeys(local, remote *chord.Vnode) error {
 	// Get local store
 	st, err := t.local.GetStore(local.Id)
 	if err != nil {
@@ -380,7 +396,7 @@ func (t *NetTransport) TransferKeys(local, remote *chord.Vnode) error {
 		return err
 	}
 
-	stream, err := out.client.TransferKeysServe(context.Background())
+	stream, err := out.client.TransferTxKeysServe(context.Background())
 	if err != nil {
 		t.reapConn(out)
 		return err
@@ -398,13 +414,15 @@ func (t *NetTransport) TransferKeys(local, remote *chord.Vnode) error {
 		return err
 	}
 
-	// TODO:
-	// Send each key & last tx hash
-
 	// Send keys from view rather than tx log.
 	var cnt int
 	//err = st.IterInodes(func(key []byte, inode *store.Inode) error {
 	err = st.IterTx(func(ktx *txlog.KeyTransactions) error {
+
+		if e := ktx.SetMode(txlog.TransitionKeyMode); e != nil {
+			return e
+		}
+
 		key := ktx.Key()
 
 		fb.Reset()
@@ -528,6 +546,17 @@ func (t *NetTransport) TransactionsServe(in *chord.Payload, stream netrpc.Difuse
 	return nil
 }
 
+func (t *NetTransport) SetModeTxKeyServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
+	vn, m, key := chord.DeserializeVnodeIntBytes(in.Data)
+	mode := txlog.KeyMode(m)
+
+	if err := t.local.SetMode(vn, key, mode); err != nil {
+		return nil, err
+	}
+
+	return &chord.Payload{}, nil
+}
+
 func (t *NetTransport) GetTxKeyServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
 	vs, key := deserializeVnodeIdsBytes(in.Data)
 	tk, err := t.local.GetTxKey(vs[0], key)
@@ -543,10 +572,16 @@ func (t *NetTransport) GetTxKeyServe(ctx context.Context, in *chord.Payload) (*c
 // GetTxServe serves a GetTx request
 func (t *NetTransport) GetTxServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
 	vns, key, txhash := deserializeVnodeIdsTwoByteSlices(in.Data)
-	rsp, _ := t.local.GetTx(key, txhash, nil, vns...)
+	tx, err := t.local.GetTx(vns[0], key, txhash)
+	if err != nil {
+		return nil, err
+	}
 
-	data := serializeVnodeIdTxErrList(rsp)
-	return &chord.Payload{Data: data}, nil
+	fb := flatbuffers.NewBuilder(0)
+	fb.Finish(serializeTx(fb, tx))
+
+	//data := serializeVnodeIdTxErrList(rsp)
+	return &chord.Payload{Data: fb.Bytes[fb.Head():]}, nil
 }
 
 // LastTxServe serves a LastTx request
@@ -703,9 +738,9 @@ func (t *NetTransport) ReplicateBlocksServe(stream netrpc.DifuseRPC_ReplicateBlo
 	return stream.SendAndClose(&chord.Payload{})
 }
 
-// TransferKeysServe serves a TransferKeys request.  It takes the stream of input keys and queues them
+// TransferTxKeysServe serves a TransferKeys request.  It takes the stream of input keys and queues them
 // to be pulled on the local vnode.
-func (t *NetTransport) TransferKeysServe(stream netrpc.DifuseRPC_TransferKeysServeServer) error {
+func (t *NetTransport) TransferTxKeysServe(stream netrpc.DifuseRPC_TransferTxKeysServeServer) error {
 	var req chord.Payload
 	err := stream.RecvMsg(&req)
 	if err != nil {
