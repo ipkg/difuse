@@ -1,0 +1,43 @@
+
+namespace gentypes;
+
+table ByteSlice {
+    B:[ubyte];
+}
+
+table TwoByteSlices {
+    B1:[ubyte];
+    B2:[ubyte];
+}
+
+table TxBlock {
+    Key:[ubyte];
+    Mode:int;       // key mode
+    Root:[ubyte];   // merkle root of tx's
+    Txs:[ByteSlice]; // tx id's
+}
+
+table Tx {
+    Key: [ubyte];
+    PrevHash:[ubyte];
+    Source: [ubyte];
+    Destination: [ubyte];
+    Signature: [ubyte];
+    Data: [ubyte];
+    Timestamp: ulong;
+    Height: ulong;
+}
+
+table Inode {
+    Id: [ubyte];
+    Size: long;     // total size of data
+    Type: byte;     // Type of inode
+    Root: [ubyte];  // Merkle root of blocks
+    BlockSize: int; // Block size for file type inodes
+    Blocks: [ByteSlice];
+}
+
+table VidTx {
+    Vid:[ubyte];
+    Tx: Tx;
+}

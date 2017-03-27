@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rpc;
+
+import "github.com/ipkg/go-chord/net.proto";
+
+service DifuseRPC {
+    rpc GetTxBlockServe(chord.Payload) returns (chord.Payload) {}
+
+    rpc GetTxServe(chord.Payload) returns (chord.Payload) {}
+    rpc NewTxServe(chord.Payload) returns (chord.Payload) {}
+    rpc ProposeTxServe(chord.Payload) returns (chord.Payload) {}
+
+    rpc TakeoverTxBlocksServe(stream chord.Payload) returns (chord.Payload) {}
+}
