@@ -90,10 +90,6 @@ func (d *Difuse) RegisterChord(ring *chord.Ring, trans chord.Transport) error {
 
 	// Initialize stores for each vnode.
 	for _, vn := range lvns {
-		/*txstore := txlog.NewBoltTxStore(d.conf.DataDir, vn.String())
-		if er := txstore.Open(0600); er != nil {
-			return er
-		}*/
 		fsm := d.conf.FSM.New(vn)
 		txstore := txlog.NewMemTxStore()
 		vstore := NewVnodeStore(txstore, d.cs, fsm)

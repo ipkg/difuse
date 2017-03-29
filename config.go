@@ -2,10 +2,12 @@ package difuse
 
 import (
 	"fmt"
+	"hash"
 	"net"
 	"strings"
 	"time"
 
+	"github.com/btcsuite/fastsha256"
 	chord "github.com/ipkg/go-chord"
 
 	"github.com/ipkg/difuse/types"
@@ -58,7 +60,7 @@ func DefaultConfig() *Config {
 	c.Chord.NumVnodes = 8
 	c.Chord.StabilizeMin = 3 * time.Second
 	c.Chord.StabilizeMax = 10 * time.Second
-	//c.Chord.HashFunc = func() hash.Hash { return fastsha256.New() }
+	c.Chord.HashFunc = func() hash.Hash { return fastsha256.New() }
 
 	return c
 }

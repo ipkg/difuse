@@ -15,7 +15,7 @@ import (
 	"github.com/ipkg/difuse"
 	"github.com/ipkg/difuse/keypairs"
 	"github.com/ipkg/difuse/rpc"
-	"github.com/ipkg/difuse/utils"
+	"github.com/ipkg/difuse/types"
 	chord "github.com/ipkg/go-chord"
 )
 
@@ -124,7 +124,7 @@ func main() {
 		key := <-readStdin()
 
 		// Create new tx
-		var opts utils.RequestOptions
+		var opts types.RequestOptions
 		ntx, _, err := df.NewTx(key, opts)
 		if err != nil {
 			log.Println("ERR", err)

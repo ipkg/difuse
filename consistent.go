@@ -44,7 +44,7 @@ func (c *consistentTransport) ProposeTx(tx *types.Tx, opts types.RequestOptions)
 	if opts.Source != nil {
 		// Broadcast to all vnodes skipping the source.
 		for _, vn := range vs {
-			if vn.String() == opts.Source.String() {
+			if vn.StringID() == opts.Source.String() {
 				continue
 			}
 

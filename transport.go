@@ -70,7 +70,7 @@ func (lt *localTransport) Register(vn *chord.Vnode, vs *VnodeStore) {
 
 	lt.lock.Lock()
 	lt.host = vn.Host
-	lt.local[vn.String()] = vs
+	lt.local[vn.StringID()] = vs
 	lt.lock.Unlock()
 
 	lt.remote.Register(vn, vs)

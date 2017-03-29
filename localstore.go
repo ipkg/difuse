@@ -55,7 +55,7 @@ func (nls localStore) NewTx(vn *chord.Vnode, key []byte) (*types.Tx, error) {
 }
 
 func (nls localStore) getStore(vn *chord.Vnode) (*VnodeStore, error) {
-	if s, ok := nls[vn.String()]; ok {
+	if s, ok := nls[vn.StringID()]; ok {
 		return s, nil
 	}
 	return nil, errStoreNotFound

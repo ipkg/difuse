@@ -162,7 +162,7 @@ func (t *NetTransport) RegisterTakeoverQ(ch chan<- *TakeoverReq) {
 
 // Register registers a store to a vnode.
 func (t *NetTransport) Register(vn *chord.Vnode, store *VnodeStore) {
-	key := vn.String()
+	key := vn.StringID()
 
 	t.lock.Lock()
 	t.local[key] = store
