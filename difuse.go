@@ -2,29 +2,29 @@ package difuse
 
 import (
 	"github.com/ipkg/difuse/txlog"
-	"github.com/ipkg/difuse/utils"
+	"github.com/ipkg/difuse/types"
 	chord "github.com/ipkg/go-chord"
 )
 
 /*// VnodeStore implements a store for a single vnode
 type VnodeStore interface {
-	NewTx(key []byte) (*txlog.Tx, error)
-	GetTx(id []byte) (*txlog.Tx, error)
-	ProposeTx(tx *txlog.Tx) error
+	NewTx(key []byte) (*types.Tx, error)
+	GetTx(id []byte) (*types.Tx, error)
+	ProposeTx(tx *types.Tx) error
 
-	GetTxBlock(key []byte) (*txlog.TxBlock, error)
-	//IterTxBlock(func(*txlog.TxBlock) error) error
+	GetTxBlock(key []byte) (*types.TxBlock, error)
+	//IterTxBlock(func(*types.TxBlock) error) error
 
 	//Snapshot() (VnodeStore, error)
 }*/
 
 // Transport is the transport interface for various rpc calls
 type Transport interface {
-	NewTx(vn *chord.Vnode, key []byte) (*txlog.Tx, error)
-	GetTx(vn *chord.Vnode, txhash []byte) (*txlog.Tx, error)
-	ProposeTx(vn *chord.Vnode, tx *txlog.Tx) error
+	NewTx(vn *chord.Vnode, key []byte) (*types.Tx, error)
+	GetTx(vn *chord.Vnode, txhash []byte) (*types.Tx, error)
+	ProposeTx(vn *chord.Vnode, tx *types.Tx) error
 
-	GetTxBlock(vn *chord.Vnode, key []byte) (*txlog.TxBlock, error)
+	GetTxBlock(vn *chord.Vnode, key []byte) (*types.TxBlock, error)
 	TransferTxBlocks(local, remote *chord.Vnode) error
 
 	Register(*chord.Vnode, *VnodeStore)
@@ -62,17 +62,17 @@ func NewDifuse(conf *Config, remote Transport) *Difuse {
 }
 
 // SignTx signs the given transaction
-func (d *Difuse) SignTx(tx *txlog.Tx) error {
+func (d *Difuse) SignTx(tx *types.Tx) error {
 	return tx.Sign(d.conf.Signator)
 }
 
 // ProposeTx proposes a new transaction to the network.
-func (d *Difuse) ProposeTx(tx *txlog.Tx, opts utils.RequestOptions) (*utils.ResponseMeta, error) {
+func (d *Difuse) ProposeTx(tx *types.Tx, opts types.RequestOptions) (*types.ResponseMeta, error) {
 	return d.cs.ProposeTx(tx, opts)
 }
 
 // NewTx returns a new transaction using an available vnode for the previous hash.
-func (d *Difuse) NewTx(key []byte, opts utils.RequestOptions) (*txlog.Tx, *utils.ResponseMeta, error) {
+func (d *Difuse) NewTx(key []byte, opts types.RequestOptions) (*types.Tx, *types.ResponseMeta, error) {
 	return d.cs.NewTx(key, opts)
 }
 

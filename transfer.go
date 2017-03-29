@@ -3,7 +3,7 @@ package difuse
 import (
 	"log"
 
-	"github.com/ipkg/difuse/txlog"
+	"github.com/ipkg/difuse/types"
 	"github.com/ipkg/difuse/utils"
 	chord "github.com/ipkg/go-chord"
 )
@@ -16,7 +16,7 @@ type transferReq struct {
 type TakeoverReq struct {
 	Src     *chord.Vnode
 	Dst     *chord.Vnode
-	TxBlock *txlog.TxBlock
+	TxBlock *types.TxBlock
 }
 
 type transferMgr struct {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/ipkg/difuse/keypairs"
 	"github.com/ipkg/difuse/txlog"
+	"github.com/ipkg/difuse/types"
 )
 
 var (
@@ -34,26 +35,26 @@ func NewVnodeStore(txstore txlog.TxStore, trans txlog.Transport, fsm txlog.FSM) 
 }
 
 // QueueBlockReplay queues a TxBlock to the tx log to be replayed.
-func (vs *VnodeStore) QueueBlockReplay(txb *txlog.TxBlock) {
+func (vs *VnodeStore) QueueBlockReplay(txb *types.TxBlock) {
 	vs.txl.QueueBlockReplay(txb)
 }
 
 // GetTx gets a tx with the given id from the tx store.
-func (vs *VnodeStore) GetTx(id []byte) (*txlog.Tx, error) {
+func (vs *VnodeStore) GetTx(id []byte) (*types.Tx, error) {
 	return vs.txstore.Get(id)
 }
 
 // GetTxBlock gets a TxBlock from the tx block store.
-func (vs *VnodeStore) GetTxBlock(key []byte) (*txlog.TxBlock, error) {
+func (vs *VnodeStore) GetTxBlock(key []byte) (*types.TxBlock, error) {
 	return vs.tbstore.Get(key)
 }
 
 // NewTx returns a new tx from the tx log.
-func (vs *VnodeStore) NewTx(key []byte) (*txlog.Tx, error) {
+func (vs *VnodeStore) NewTx(key []byte) (*types.Tx, error) {
 	return vs.txl.NewTx(key)
 }
 
 // ProposeTx proposed the given tx to the tx log.
-func (vs *VnodeStore) ProposeTx(tx *txlog.Tx) error {
+func (vs *VnodeStore) ProposeTx(tx *types.Tx) error {
 	return vs.txl.ProposeTx(tx)
 }

@@ -15,18 +15,18 @@ import (
 	"github.com/ipkg/difuse/keypairs"
 	"github.com/ipkg/difuse/rpc"
 	"github.com/ipkg/difuse/txlog"
-	"github.com/ipkg/difuse/utils"
+	"github.com/ipkg/difuse/types"
 )
 
 type testTxlogTrans struct {
 	tl *txlog.TxLog
 }
 
-func (tb *testTxlogTrans) GetTx(hash []byte, opts utils.RequestOptions) (*txlog.Tx, *utils.ResponseMeta, error) {
+func (tb *testTxlogTrans) GetTx(hash []byte, opts types.RequestOptions) (*types.Tx, *types.ResponseMeta, error) {
 	return nil, nil, fmt.Errorf("tbi")
 }
 
-func (tb *testTxlogTrans) ProposeTx(tx *txlog.Tx, opts utils.RequestOptions) (*utils.ResponseMeta, error) {
+func (tb *testTxlogTrans) ProposeTx(tx *types.Tx, opts types.RequestOptions) (*types.ResponseMeta, error) {
 	var err error
 	for i := 0; i < 4; i++ {
 		if er := tb.tl.ProposeTx(tx); er != nil {
@@ -43,8 +43,8 @@ func newGRPCServer(p int) (net.Listener, *grpc.Server, error) {
 		return nil, nil, err
 	}
 
-	opt := grpc.CustomCodec(&chord.PayloadCodec{})
-	server := grpc.NewServer(opt)
+	//opt := grpc.CustomCodec(&chord.PayloadCodec{})
+	server := grpc.NewServer()
 	return ln, server, nil
 }
 
@@ -76,10 +76,11 @@ func TestNetTransportTx(t *testing.T) {
 	dir, _ := ioutil.TempDir("", "difuse-test")
 	defer os.RemoveAll(dir)
 
-	txs1 := txlog.NewBoltTxStore(dir, vn1.String())
-	if er := txs1.Open(0600); er != nil {
-		t.Fatal(er)
-	}
+	//txs1 := txlog.NewBoltTxStore(dir, vn1.String())
+	//if er := txs1.Open(0600); er != nil {
+	//t.Fatal(er)
+	//}
+	txs1 := txlog.NewMemTxStore()
 
 	tt := &testTxlogTrans{}
 	st1 := NewVnodeStore(txs1, tt, &DummyFSM{vn: vn1})

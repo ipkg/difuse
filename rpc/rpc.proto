@@ -2,14 +2,12 @@ syntax = "proto3";
 
 package rpc;
 
-import "github.com/ipkg/go-chord/net.proto";
+import "github.com/ipkg/difuse/types/types.proto";
 
 service DifuseRPC {
-    rpc GetTxBlockServe(chord.Payload) returns (chord.Payload) {}
-
-    rpc GetTxServe(chord.Payload) returns (chord.Payload) {}
-    rpc NewTxServe(chord.Payload) returns (chord.Payload) {}
-    rpc ProposeTxServe(chord.Payload) returns (chord.Payload) {}
-
-    rpc TakeoverTxBlocksServe(stream chord.Payload) returns (chord.Payload) {}
+    rpc GetTxBlockServe(types.VnodeBytes) returns (types.TxBlock) {}
+    rpc GetTxServe(types.VnodeBytes) returns (types.Tx) {}
+    rpc NewTxServe(types.VnodeBytes) returns (types.Tx) {}
+    rpc ProposeTxServe(types.VnodeTx) returns (types.VnodeBytes) {}
+    rpc TakeoverTxBlocksServe(stream types.TxBlock) returns (types.VnodeBytes) {}
 }

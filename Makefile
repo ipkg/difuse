@@ -1,6 +1,6 @@
 
 
-NAME = difused
+NAME = difuse
 VERSION = $(shell grep 'const VERSION' version.go | cut -d'"' -f 2)
 
 BRANCH = $(shell git rev-parse --abbrev-ref HEAD || echo unknown)
@@ -12,28 +12,21 @@ BUILD_CMD = CGO_ENABLED=0 go build -a -tags netgo -installsuffix netgo
 
 clean:
 	rm -f testube
-	rm -f keyber
 
-fbs:
-	@rm -rf gentypes/*.go
-	flatc -I ../../../ -I . -g ./gentypes/types.fbs
+protoc-types:
+	@rm -f types/types.pb.go
+	protoc -I ../../../ -I ./types ./types/types.proto --go_out=plugins=grpc:./types
 
-	@#sed -e $$'s/import (/import (\\\n    "github.com\/ipkg\/go-chord\/fbtypes"/g' -e 's/Vnode/fbtypes.Vnode/g' ./gentypes/TransferRequest.go > ./gentypes/TransferRequest.go-sed
-	@#mv ./gentypes/TransferRequest.go-sed ./gentypes/TransferRequest.go
-
-	@#sed -e $$'s/import (/import (\\\n    "github.com\/ipkg\/go-chord\/fbtypes"/g' -e 's/*Vnode/*fbtypes.Vnode/g' -e 's/new(Vnode)/new(fbtypes.Vnode)/g' ./gentypes/TxRequest.go > ./gentypes/TxRequest.go-sed
-	@#mv ./gentypes/TxRequest.go-sed ./gentypes/TxRequest.go
-
-
-protoc:
+protoc-rpc:
 	@rm -f rpc/rpc.pb.go
-	protoc -I ../../../ -I ./rpc ./rpc/rpc.proto --go_out=plugins=grpc:./rpc
+	protoc -I ../../../ -I ./types -I ./rpc ./rpc/rpc.proto --go_out=plugins=grpc:./rpc
 
-prep: fbs protoc
+protoc: protoc-types protoc-rpc
 
 test:
 	@go test -cover .
 	@go test -cover ./txlog
+	@go test -cover ./types
 	@go test -cover ./keypairs
 	@go test -cover ./utils
 

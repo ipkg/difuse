@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/ipkg/difuse/types"
 	"github.com/ipkg/difuse/utils"
 )
 
@@ -23,16 +24,18 @@ func NewHTTPAdminServer(dif *Difuse, prefix string) *HTTPAdminServer {
 	return s
 }
 
-func (h *HTTPAdminServer) parseConsistency(r *http.Request) uint8 {
+func (h *HTTPAdminServer) parseConsistency(r *http.Request) types.Consistency {
 	c, ok := r.URL.Query()["consistency"]
 	if ok && len(c) > 0 {
 		switch c[0] {
 		case "all":
-			return utils.ConsistencyAll
+			return types.Consistency_ALL
+		case "quorum":
+			return types.Consistency_QUORUM
 		}
 	}
 
-	return utils.ConsistencyLazy
+	return types.Consistency_LAZY
 }
 
 func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +43,7 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		urlPath = strings.TrimPrefix(r.URL.Path, h.prefix)
 		data    interface{}
 		err     error
-		meta    *utils.ResponseMeta
+		meta    *types.ResponseMeta
 	)
 
 	switch {
@@ -48,8 +51,8 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		sid := strings.TrimPrefix(urlPath, "txblock/")
 		key := []byte(sid)
 
-		opts := utils.RequestOptions{Consistency: h.parseConsistency(r)}
-		if opts.Consistency == utils.ConsistencyAll {
+		opts := types.RequestOptions{Consistency: h.parseConsistency(r)}
+		if opts.Consistency == types.Consistency_ALL {
 			data, meta, err = h.cs.GetTxBlockAll(key, opts)
 		} else {
 			data, meta, err = h.cs.GetTxBlock(key, opts)
@@ -62,8 +65,8 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		opts := utils.RequestOptions{Consistency: h.parseConsistency(r)}
-		if opts.Consistency == utils.ConsistencyAll {
+		opts := types.RequestOptions{Consistency: h.parseConsistency(r)}
+		if opts.Consistency == types.Consistency_ALL {
 			data, meta, err = h.cs.GetTxAll(txhash, opts)
 		} else {
 			data, meta, err = h.cs.GetTx(txhash, opts)

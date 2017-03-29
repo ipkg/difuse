@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/ipkg/difuse/types"
 	"github.com/ipkg/difuse/utils"
 	chord "github.com/ipkg/go-chord"
 )
@@ -17,34 +18,34 @@ var (
 
 // FSM represents the finite state machine
 type FSM interface {
-	Apply(ktx *Tx) error // called when a tx has been accepted by the log
-	Vnode() *chord.Vnode // vnode of the fsm is attached to.
+	Apply(ktx *types.Tx) error // called when a tx has been accepted by the log
+	Vnode() *chord.Vnode       // vnode of the fsm is attached to.
 }
 
 // Transport implements a network transport for the log
 type Transport interface {
-	ProposeTx(tx *Tx, opts utils.RequestOptions) (*utils.ResponseMeta, error)
-	GetTx(hash []byte, opts utils.RequestOptions) (*Tx, *utils.ResponseMeta, error)
+	ProposeTx(tx *types.Tx, opts types.RequestOptions) (*types.ResponseMeta, error)
+	GetTx(hash []byte, opts types.RequestOptions) (*types.Tx, *types.ResponseMeta, error)
 }
 
 // TxLog is the core of the transaction log.  It does all of the heavy duty lifting ensuring order,
 // integrity, votes etc.
 type TxLog struct {
-	signator Signator
+	signator types.Signator
 	txstore  TxStore
 	tbstore  TxBlockStore
 
 	vc *txElector
 
 	tlock   sync.RWMutex
-	lastQTx map[string]*Tx
+	lastQTx map[string]*types.Tx
 
 	// buffer to append tx's to the log
-	appendCh chan *Tx
+	appendCh chan *types.Tx
 	// buffer to replay tx's for the given block
-	replayBlock chan *TxBlock
+	replayBlock chan *types.TxBlock
 	// buffer to walk tx's in reverse order
-	walkTx chan *Tx
+	walkTx chan *types.Tx
 
 	transport Transport
 
@@ -52,12 +53,12 @@ type TxLog struct {
 }
 
 // NewTxLog initializes a new transaction log.
-func NewTxLog(signator Signator, tbstore TxBlockStore, txstore TxStore, trans Transport, fsm FSM) *TxLog {
+func NewTxLog(signator types.Signator, tbstore TxBlockStore, txstore TxStore, trans Transport, fsm FSM) *TxLog {
 	txl := &TxLog{
-		lastQTx:     make(map[string]*Tx),
-		appendCh:    make(chan *Tx, 32),
-		replayBlock: make(chan *TxBlock, 64),
-		walkTx:      make(chan *Tx, 16),
+		lastQTx:     make(map[string]*types.Tx),
+		appendCh:    make(chan *types.Tx, 32),
+		walkTx:      make(chan *types.Tx, 16),
+		replayBlock: make(chan *types.TxBlock, 64),
 		vc:          newTxElector(4),
 		txstore:     txstore,
 		tbstore:     tbstore,
@@ -70,13 +71,13 @@ func NewTxLog(signator Signator, tbstore TxBlockStore, txstore TxStore, trans Tr
 }
 
 // QueueBlockReplay submits a tx block to be replayed.
-func (txl *TxLog) QueueBlockReplay(txb *TxBlock) {
+func (txl *TxLog) QueueBlockReplay(txb *types.TxBlock) {
 	txl.replayBlock <- txb
 }
 
 // NewTx creates a new transaction for the given key.  It uses the previous hash or uses the zero
 // hash if it is the first transaction for the key.
-func (txl *TxLog) NewTx(key []byte) (*Tx, error) {
+func (txl *TxLog) NewTx(key []byte) (*types.Tx, error) {
 	// Check store to make sure key is usable
 	if blk, err := txl.tbstore.Get(key); err == nil {
 		if m, ok := blk.Degraded(); ok {
@@ -88,16 +89,16 @@ func (txl *TxLog) NewTx(key []byte) (*Tx, error) {
 	lktx, _ := txl.LastTx(key)
 	if lktx == nil {
 		// Create a new key with the prev hash set to zero.
-		return NewTx(key, make([]byte, 32), nil), nil
+		return types.NewTx(key, make([]byte, 32), nil), nil
 	}
 
-	ntx := NewTx(key, lktx.Hash(), nil)
-	ntx.Height = lktx.Height + 1
+	ntx := types.NewTx(key, lktx.Hash(), nil)
+	ntx.Header.Height = lktx.Header.Height + 1
 	return ntx, nil
 }
 
 // ProposeTx proposes a new transaction to the network.
-func (txl *TxLog) ProposeTx(tx *Tx) error {
+func (txl *TxLog) ProposeTx(tx *types.Tx) error {
 	var (
 		th = tx.Hash()
 		lh []byte
@@ -134,7 +135,7 @@ func (txl *TxLog) ProposeTx(tx *Tx) error {
 	} else if bcast {
 		log.Printf("DBG vn=%s action=broadcast key=%s", utils.ShortVnodeID(txl.fsm.Vnode()), tx.Key)
 		// Propose tx to the network
-		_, err = txl.transport.ProposeTx(tx, utils.RequestOptions{Source: txl.fsm.Vnode()})
+		_, err = txl.transport.ProposeTx(tx, types.RequestOptions{Source: txl.fsm.Vnode()})
 		return err
 	}
 
@@ -152,7 +153,7 @@ func (txl *TxLog) ProposeTx(tx *Tx) error {
 
 // LastTx returns the last transaction from the log's perpsective.  This may include ones currently
 // queueud in the buffer.
-func (txl *TxLog) LastTx(key []byte) (*Tx, error) {
+func (txl *TxLog) LastTx(key []byte) (*types.Tx, error) {
 	// Check in-mem first
 	txl.tlock.RLock()
 	if v, ok := txl.lastQTx[string(key)]; ok {
@@ -185,7 +186,7 @@ func (txl *TxLog) Start() {
 	go txl.startAppender()
 }
 
-func (txl *TxLog) queueTx(tx *Tx) (hashMismatch bool) {
+func (txl *TxLog) queueTx(tx *types.Tx) (hashMismatch bool) {
 	// check previous hash
 	var lhash []byte
 	if ltx, err := txl.LastTx(tx.Key); err == nil {
@@ -194,7 +195,7 @@ func (txl *TxLog) queueTx(tx *Tx) (hashMismatch bool) {
 		lhash = make([]byte, 32)
 	}
 
-	if !utils.EqualBytes(lhash, tx.PrevHash) {
+	if !utils.EqualBytes(lhash, tx.Header.PrevHash) {
 		return true
 	}
 
@@ -208,7 +209,7 @@ func (txl *TxLog) queueTx(tx *Tx) (hashMismatch bool) {
 	return false
 }
 
-func (txl *TxLog) appendTx(tx *Tx) error {
+func (txl *TxLog) appendTx(tx *types.Tx) error {
 	// Check if we have ktx in the our store.
 	_, err := txl.txstore.Get(tx.Hash())
 	if err == nil {
@@ -226,7 +227,7 @@ func (txl *TxLog) appendTx(tx *Tx) error {
 	return nil
 }
 
-func (txl *TxLog) applyTx(tx *Tx) error {
+func (txl *TxLog) applyTx(tx *types.Tx) error {
 	// Add tx to log i.e. tx stable store.
 	if err := txl.txstore.Set(tx); err != nil {
 		return err
@@ -235,7 +236,7 @@ func (txl *TxLog) applyTx(tx *Tx) error {
 	// check block
 	block, err := txl.tbstore.Get(tx.Key)
 	if err != nil {
-		block = NewTxBlock(tx.Key)
+		block = types.NewTxBlock(tx.Key)
 	}
 	block.AppendTx(tx.Hash())
 
@@ -254,13 +255,13 @@ func (txl *TxLog) applyTx(tx *Tx) error {
 }
 
 func (txl *TxLog) startBlockReplayer() {
-	opts := utils.RequestOptions{}
+	opts := types.RequestOptions{}
 
 	for txb := range txl.replayBlock {
 		// Set tx block if needed and set to take over mode
-		txl.tbstore.Create(txb.key, TakeoverTxBlockMode)
+		txl.tbstore.Create(txb.Key, types.TxBlockMode_TAKEOVER)
 
-		opts.PeerSetKey = txb.key
+		opts.PeerSetKey = txb.Key
 		tx, _, err := txl.transport.GetTx(txb.LastTx(), opts)
 		if err != nil {
 			log.Printf("ERR action=replay-block msg='%v'", err)
@@ -338,7 +339,7 @@ func (txl *TxLog) startTxWalker() {
 
 		// TODO: send key to be verified and marked as normal
 
-		if er := txl.tbstore.SetMode(tx.Key, NormalTxBlockMode); er != nil {
+		if er := txl.tbstore.SetMode(tx.Key, types.TxBlockMode_NORMAL); er != nil {
 			log.Printf("ERR key=%s msg='%v'", tx.Key, er)
 		}
 
@@ -346,13 +347,13 @@ func (txl *TxLog) startTxWalker() {
 }
 
 // fetch all tx's starting from the last tx working backwards to the end hash
-func (txl *TxLog) reverseFetch(startTx *Tx, end []byte) ([]*Tx, error) {
+func (txl *TxLog) reverseFetch(startTx *types.Tx, end []byte) ([]*types.Tx, error) {
 	// Get all required tx's working our way backwards.
 	var (
 		err   error
-		out   = make([]*Tx, 0)
-		opts  = utils.RequestOptions{PeerSetKey: startTx.Key}
-		phash = startTx.PrevHash
+		out   = make([]*types.Tx, 0)
+		opts  = types.RequestOptions{PeerSetKey: startTx.Key}
+		phash = startTx.Header.PrevHash
 	)
 
 	for {
@@ -369,7 +370,7 @@ func (txl *TxLog) reverseFetch(startTx *Tx, end []byte) ([]*Tx, error) {
 
 		out = append(out, t)
 
-		phash = t.PrevHash
+		phash = t.Header.PrevHash
 
 	}
 

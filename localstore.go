@@ -1,7 +1,7 @@
 package difuse
 
 import (
-	"github.com/ipkg/difuse/txlog"
+	"github.com/ipkg/difuse/types"
 	chord "github.com/ipkg/go-chord"
 )
 
@@ -9,7 +9,7 @@ import (
 // stores for a node.
 type localStore map[string]*VnodeStore
 
-func (nls localStore) QueueBlockReplay(vn *chord.Vnode, txb *txlog.TxBlock) error {
+func (nls localStore) QueueBlockReplay(vn *chord.Vnode, txb *types.TxBlock) error {
 	st, err := nls.getStore(vn)
 	if err == nil {
 		st.QueueBlockReplay(txb)
@@ -17,7 +17,7 @@ func (nls localStore) QueueBlockReplay(vn *chord.Vnode, txb *txlog.TxBlock) erro
 	return err
 }
 
-func (nls localStore) GetTxBlock(vn *chord.Vnode, key []byte) (*txlog.TxBlock, error) {
+func (nls localStore) GetTxBlock(vn *chord.Vnode, key []byte) (*types.TxBlock, error) {
 	st, err := nls.getStore(vn)
 	if err == nil {
 		return st.GetTxBlock(key)
@@ -25,7 +25,7 @@ func (nls localStore) GetTxBlock(vn *chord.Vnode, key []byte) (*txlog.TxBlock, e
 	return nil, err
 }
 
-func (nls localStore) ProposeTx(vn *chord.Vnode, tx *txlog.Tx) error {
+func (nls localStore) ProposeTx(vn *chord.Vnode, tx *types.Tx) error {
 	st, err := nls.getStore(vn)
 	if err == nil {
 		return st.ProposeTx(tx)
@@ -34,7 +34,7 @@ func (nls localStore) ProposeTx(vn *chord.Vnode, tx *txlog.Tx) error {
 }
 
 // GetTx gets a keyed tx from multiple vnodes based on the specified consistency.  All vnodes in the slice are assumed to be local vnodes
-func (nls localStore) GetTx(vn *chord.Vnode, txhash []byte) (*txlog.Tx, error) {
+func (nls localStore) GetTx(vn *chord.Vnode, txhash []byte) (*types.Tx, error) {
 
 	st, err := nls.getStore(vn)
 	if err == nil {
@@ -44,7 +44,7 @@ func (nls localStore) GetTx(vn *chord.Vnode, txhash []byte) (*txlog.Tx, error) {
 	return nil, err
 }
 
-func (nls localStore) NewTx(vn *chord.Vnode, key []byte) (*txlog.Tx, error) {
+func (nls localStore) NewTx(vn *chord.Vnode, key []byte) (*types.Tx, error) {
 
 	st, err := nls.getStore(vn)
 	if err == nil {

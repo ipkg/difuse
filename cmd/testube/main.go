@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -46,8 +47,8 @@ func newGRPCServer() (net.Listener, *grpc.Server, error) {
 		return nil, nil, err
 	}
 
-	opt := grpc.CustomCodec(&chord.PayloadCodec{})
-	return ln, grpc.NewServer(opt), nil
+	//	opt := grpc.CustomCodec(&chord.PayloadCodec{})
+	return ln, grpc.NewServer(), nil
 }
 
 func init() {
@@ -75,6 +76,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	log.SetPrefix(fmt.Sprintf("[%s] ", conf.Chord.Hostname))
+
 	ln, gserver, err := newGRPCServer()
 	if err != nil {
 		log.Fatal(err)
@@ -90,9 +93,10 @@ func main() {
 	conf.Chord.Delegate = df
 
 	// Init chord transport
-	ctrans := chord.NewGRPCTransport(3*time.Second, 300*time.Second)
+	ctrans := chord.NewGRPCTransport(ln, gserver, 3*time.Second, 300*time.Second)
 	// Register chord transport
-	chord.RegisterChordServer(gserver, ctrans)
+	//chord.RegisterChordServer(gserver, ctrans)
+
 	// start grpc
 	go gserver.Serve(ln)
 

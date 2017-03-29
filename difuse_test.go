@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ipkg/difuse/keypairs"
-	"github.com/ipkg/difuse/utils"
+	"github.com/ipkg/difuse/types"
 	chord "github.com/ipkg/go-chord"
 )
 
@@ -40,8 +40,8 @@ func prepDifuse(p int, j ...string) (*Difuse, error) {
 	sault1 := NewDifuse(c1, t1)
 	c1.Chord.Delegate = sault1
 
-	ct1 := chord.NewGRPCTransport(3*time.Second, 300*time.Second)
-	chord.RegisterChordServer(s1, ct1)
+	ct1 := chord.NewGRPCTransport(ln, s1, 3*time.Second, 300*time.Second)
+	//chord.RegisterChordServer(s1, ct1)
 
 	go s1.Serve(ln)
 
@@ -87,7 +87,7 @@ func TestDifuse(t *testing.T) {
 
 	<-time.After(750 * time.Millisecond)
 
-	var opts utils.RequestOptions
+	var opts types.RequestOptions
 
 	testkey := []byte("key")
 	ntx, meta, err := s1.cs.NewTx(testkey, opts)

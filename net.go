@@ -6,15 +6,13 @@ import (
 	"sync"
 	"time"
 
-	flatbuffers "github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	chord "github.com/ipkg/go-chord"
 
-	"github.com/ipkg/difuse/gentypes"
 	"github.com/ipkg/difuse/rpc"
-	"github.com/ipkg/difuse/txlog"
+	"github.com/ipkg/difuse/types"
 	"github.com/ipkg/difuse/utils"
 )
 
@@ -74,30 +72,30 @@ func (t *NetTransport) TransferTxBlocks(local, remote *chord.Vnode) error {
 		return err
 	}
 
-	// Init flatbuff
+	/*// Init flatbuff
 	fb := flatbuffers.NewBuilder(0)
 	// Serialize destination vnode
 	ofs := serializeByteSlice(fb, remote.Id)
 	fb.Finish(ofs)
-	m := &chord.Payload{Data: fb.Bytes[fb.Head():]}
+	m := &chord.Payload{Data: fb.Bytes[fb.Head():]}*/
 
 	// Send dest. vnode
-	if err = stream.SendMsg(m); err != nil {
+	if err = stream.SendMsg(remote); err != nil {
 		return err
 	}
 
 	// Send all tx blocks from the local vnode snapshot to the remote dest. vnode.
-	err = ss.Iter(func(txb *txlog.TxBlock) error {
+	err = ss.Iter(func(txb *types.TxBlock) error {
 
-		fb.Reset()
-		ofs := txb.Serialize(fb)
-		fb.Finish(ofs)
+		//fb.Reset()
+		//ofs := txb.Serialize(fb)
+		//fb.Finish(ofs)
 
-		payload := &chord.Payload{Data: fb.Bytes[fb.Head():]}
-		if er := stream.Send(payload); er != nil {
+		//payload := &chord.Payload{Data: fb.Bytes[fb.Head():]}
+		if er := stream.Send(txb); er != nil {
 			log.Printf("ERR msg='%v'", er)
 		} else {
-			log.Printf("vn=%s action=transfered key=%s count=%d", utils.ShortVnodeID(local), txb.Key(), len(txb.TxIds()))
+			log.Printf("vn=%s action=transfered key=%s count=%d", utils.ShortVnodeID(local), txb.Key, len(txb.TXs))
 		}
 
 		return nil
@@ -107,93 +105,55 @@ func (t *NetTransport) TransferTxBlocks(local, remote *chord.Vnode) error {
 }
 
 // GetTxBlock retreives a transaction block from the remote vnode.
-func (t *NetTransport) GetTxBlock(vn *chord.Vnode, key []byte) (*txlog.TxBlock, error) {
+func (t *NetTransport) GetTxBlock(vn *chord.Vnode, key []byte) (*types.TxBlock, error) {
 	out, err := t.getConn(vn.Host)
 	if err != nil {
 		return nil, err
 	}
 
-	data := serializeTwoByteSlices(vn.Id, key)
-	payload := &chord.Payload{Data: data}
-
-	resp, err := out.client.GetTxBlockServe(context.Background(), payload)
-	if err != nil {
-		return nil, err
-	}
+	resp, err := out.client.GetTxBlockServe(context.Background(), &types.VnodeBytes{Vnode: vn, Bytes: key})
 
 	t.returnConn(out)
-
-	fbtk := gentypes.GetRootAsTxBlock(resp.Data, 0)
-	var kt txlog.TxBlock
-	kt.Deserialize(fbtk)
-	return &kt, nil
+	return resp, err
 }
 
 // ProposeTx proposes a new transaction to the remote vnode.
-func (t *NetTransport) ProposeTx(vn *chord.Vnode, tx *txlog.Tx) error {
+func (t *NetTransport) ProposeTx(vn *chord.Vnode, tx *types.Tx) error {
 
 	out, err := t.getConn(vn.Host)
 	if err != nil {
 		return err
 	}
 
-	data := serializeVnodeIdTx(vn.Id, tx)
-	payload := &chord.Payload{Data: data}
-
-	_, err = out.client.ProposeTxServe(context.Background(), payload)
+	_, err = out.client.ProposeTxServe(context.Background(), &types.VnodeTx{Vnode: vn, Tx: tx})
 
 	t.returnConn(out)
-
 	return err
 }
 
 // GetTx gets a transaction from the remote vnode.
-func (t *NetTransport) GetTx(vn *chord.Vnode, txhash []byte) (*txlog.Tx, error) {
-
+func (t *NetTransport) GetTx(vn *chord.Vnode, txhash []byte) (*types.Tx, error) {
 	out, err := t.getConn(vn.Host)
 	if err != nil {
 		return nil, err
 	}
 
-	data := serializeTwoByteSlices(vn.Id, txhash)
-	payload := &chord.Payload{Data: data}
-
-	resp, err := out.client.GetTxServe(context.Background(), payload)
-	if err != nil {
-		return nil, err
-	}
+	resp, err := out.client.GetTxServe(context.Background(), &types.VnodeBytes{Vnode: vn, Bytes: txhash})
 
 	t.returnConn(out)
-
-	fbtx := gentypes.GetRootAsTx(resp.Data, 0)
-	var tx txlog.Tx
-	tx.Deserialize(fbtx)
-
-	return &tx, nil
+	return resp, err
 }
 
 // NewTx requests a new transaction from the given vnoode.
-func (t *NetTransport) NewTx(vn *chord.Vnode, key []byte) (*txlog.Tx, error) {
+func (t *NetTransport) NewTx(vn *chord.Vnode, key []byte) (*types.Tx, error) {
 	out, err := t.getConn(vn.Host)
 	if err != nil {
 		return nil, err
 	}
 
-	data := serializeTwoByteSlices(vn.Id, key)
-	payload := &chord.Payload{Data: data}
-
-	resp, err := out.client.NewTxServe(context.Background(), payload)
-	if err != nil {
-		return nil, err
-	}
-
+	resp, err := out.client.NewTxServe(context.Background(), &types.VnodeBytes{Vnode: vn, Bytes: key})
 	t.returnConn(out)
-
-	fbtx := gentypes.GetRootAsTx(resp.Data, 0)
-	var tx txlog.Tx
-	tx.Deserialize(fbtx)
-
-	return &tx, nil
+	return resp, err
 }
 
 func (t *NetTransport) RegisterTakeoverQ(ch chan<- *TakeoverReq) {
@@ -210,77 +170,40 @@ func (t *NetTransport) Register(vn *chord.Vnode, store *VnodeStore) {
 }
 
 // GetTxBlockServe serves a tx block request.  It retreives a transaction block from the given vnode
-func (t *NetTransport) GetTxBlockServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
-	bs := gentypes.GetRootAsTwoByteSlices(in.Data, 0)
-
-	tk, err := t.local.GetTxBlock(&chord.Vnode{Id: bs.B1Bytes()}, bs.B2Bytes())
-	if err != nil {
-		return nil, err
-	}
-
-	fb := flatbuffers.NewBuilder(0)
-	fb.Finish(tk.Serialize(fb))
-	return &chord.Payload{Data: fb.Bytes[fb.Head():]}, nil
+func (t *NetTransport) GetTxBlockServe(ctx context.Context, in *types.VnodeBytes) (*types.TxBlock, error) {
+	return t.local.GetTxBlock(in.Vnode, in.Bytes)
 }
 
 // GetTxServe serves a GetTx request.  It tries to retrieve a transaction from given vnode.
-func (t *NetTransport) GetTxServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
-	bs := gentypes.GetRootAsTwoByteSlices(in.Data, 0)
-
-	tx, err := t.local.GetTx(&chord.Vnode{Id: bs.B1Bytes()}, bs.B2Bytes())
-	if err != nil {
-		return nil, err
-	}
-
-	fb := flatbuffers.NewBuilder(0)
-	fb.Finish(tx.Serialize(fb))
-
-	return &chord.Payload{Data: fb.Bytes[fb.Head():]}, nil
+func (t *NetTransport) GetTxServe(ctx context.Context, in *types.VnodeBytes) (*types.Tx, error) {
+	return t.local.GetTx(in.Vnode, in.Bytes)
 }
 
 // NewTxServe serves a new transaction request.  It creates a new transaction using the given vnode
 // to obtain the previous hash.
-func (t *NetTransport) NewTxServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
-	bs := gentypes.GetRootAsTwoByteSlices(in.Data, 0)
-
-	tx, err := t.local.NewTx(&chord.Vnode{Id: bs.B1Bytes()}, bs.B2Bytes())
-	if err != nil {
-		return nil, err
-	}
-
-	fb := flatbuffers.NewBuilder(0)
-	fb.Finish(tx.Serialize(fb))
-
-	return &chord.Payload{Data: fb.Bytes[fb.Head():]}, nil
+func (t *NetTransport) NewTxServe(ctx context.Context, in *types.VnodeBytes) (*types.Tx, error) {
+	return t.local.NewTx(in.Vnode, in.Bytes)
 }
 
 // ProposeTxServe serves a propose tx request.
-func (t *NetTransport) ProposeTxServe(ctx context.Context, in *chord.Payload) (*chord.Payload, error) {
-	obj := gentypes.GetRootAsVidTx(in.Data, 0)
-	txobj := obj.Tx(nil)
-
-	var tx txlog.Tx
-	tx.Deserialize(txobj)
-
-	if err := t.local.ProposeTx(&chord.Vnode{Id: obj.VidBytes()}, &tx); err != nil {
-		return nil, err
-	}
-
-	return &chord.Payload{Data: []byte{}}, nil
+func (t *NetTransport) ProposeTxServe(ctx context.Context, in *types.VnodeTx) (*types.VnodeBytes, error) {
+	return &types.VnodeBytes{}, t.local.ProposeTx(in.Vnode, in.Tx)
 }
 
 // TakeoverTxBlocksServe takes over ownership of tx blocks sent to it.  This queues the fetching of tx's
 // within the block which eventually get applied by the fsm.
 func (t *NetTransport) TakeoverTxBlocksServe(stream rpc.DifuseRPC_TakeoverTxBlocksServeServer) error {
 	// Recv vnode id
-	var req chord.Payload
-	err := stream.RecvMsg(&req)
+	vn := &chord.Vnode{}
+
+	//var req chord.Payload
+	err := stream.RecvMsg(vn)
 	if err != nil {
 		return err
 	}
 
-	vid := gentypes.GetRootAsByteSlice(req.Data, 0)
-	vn := &chord.Vnode{Id: vid.BBytes(), Host: t.host}
+	//vid := gentypes.GetRootAsByteSlice(req.Data, 0)
+	//vn := &chord.Vnode{Id: vid.BBytes(), Host: t.host}
 
 	//_, err = t.local.getStore(vn)
 	//if err != nil {
@@ -291,7 +214,7 @@ func (t *NetTransport) TakeoverTxBlocksServe(stream rpc.DifuseRPC_TakeoverTxBloc
 	//tbstore := txl.GetTxBlockStore()
 
 	for {
-		pl, e := stream.Recv()
+		txb, e := stream.Recv()
 		if e != nil {
 			if e != io.EOF {
 				err = e
@@ -299,12 +222,12 @@ func (t *NetTransport) TakeoverTxBlocksServe(stream rpc.DifuseRPC_TakeoverTxBloc
 			break
 		}
 
-		fbtb := gentypes.GetRootAsTxBlock(pl.Data, 0)
-		txb := &txlog.TxBlock{}
-		txb.Deserialize(fbtb)
+		//fbtb := gentypes.GetRootAsTxBlock(pl.Data, 0)
+		//txb := &txlog.TxBlock{}
+		//txb.Deserialize(fbtb)
 
 		//err = st.TakeOver(txb)
-		log.Printf("INF action=begin-takeover vn=%s key=%s", utils.ShortVnodeID(vn), txb.Key())
+		log.Printf("INF action=begin-takeover vn=%s key=%s", utils.ShortVnodeID(vn), txb.Key)
 		t.takeoverq <- &TakeoverReq{Dst: vn, TxBlock: txb}
 		//if e = t.local.QueueBlockReplay(vn, txb); e != nil {
 		//	log.Printf("ERR msg='%v'", e)
@@ -330,7 +253,7 @@ func (t *NetTransport) getConn(host string) (*outConn, error) {
 	}
 	t.clock.RUnlock()
 
-	conn, err := grpc.Dial(host, grpc.WithInsecure(), grpc.WithCodec(&chord.PayloadCodec{}))
+	conn, err := grpc.Dial(host, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
@@ -375,14 +298,14 @@ func (t *NetTransport) reapOnce() {
 	t.clock.Unlock()
 }
 
-func serializeByteSlice(fb *flatbuffers.Builder, b []byte) flatbuffers.UOffsetT {
+/*func serializeByteSlice(fb *flatbuffers.Builder, b []byte) flatbuffers.UOffsetT {
 	ip := fb.CreateByteString(b)
 	gentypes.ByteSliceStart(fb)
 	gentypes.ByteSliceAddB(fb, ip)
 	return gentypes.ByteSliceEnd(fb)
 }
 
-func serializeVnodeIdTx(vid []byte, tx *txlog.Tx) []byte {
+func serializeVnodeIdTx(vid []byte, tx *types.Tx) []byte {
 	fb := flatbuffers.NewBuilder(0)
 	vp := fb.CreateByteString(vid)
 	txp := tx.Serialize(fb)
@@ -406,4 +329,4 @@ func serializeTwoByteSlices(b1, b2 []byte) []byte {
 	ofs := gentypes.TwoByteSlicesEnd(fb)
 	fb.Finish(ofs)
 	return fb.Bytes[fb.Head():]
-}
+}*/

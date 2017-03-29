@@ -4,8 +4,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/ipkg/difuse/txlog"
-	"github.com/ipkg/difuse/utils"
+	"github.com/ipkg/difuse/types"
 	chord "github.com/ipkg/go-chord"
 )
 
@@ -24,23 +23,23 @@ func newConsistentTransport(conf *chord.Config, ring *chord.Ring, trans Transpor
 	}
 }
 
-func (c *consistentTransport) setDefaultOpts(opts *utils.RequestOptions) {
+func (c *consistentTransport) setDefaultOpts(opts *types.RequestOptions) {
 	if opts.PeerSetSize <= 0 {
-		opts.PeerSetSize = c.conf.NumSuccessors
+		opts.PeerSetSize = int32(c.conf.NumSuccessors)
 	}
 }
 
-func (c *consistentTransport) ProposeTx(tx *txlog.Tx, opts utils.RequestOptions) (*utils.ResponseMeta, error) {
+func (c *consistentTransport) ProposeTx(tx *types.Tx, opts types.RequestOptions) (*types.ResponseMeta, error) {
 
 	c.setDefaultOpts(&opts)
 
-	khash, vs, err := c.ring.Lookup(opts.PeerSetSize, tx.Key)
+	khash, vs, err := c.ring.Lookup(int(opts.PeerSetSize), tx.Key)
 	if err != nil {
 		return nil, err
 	}
 
 	// Set the first vnode for meta as this will be broadcasted to designate the starting point.
-	rmeta := &utils.ResponseMeta{KeyHash: khash, Vnode: vs[0]}
+	rmeta := &types.ResponseMeta{KeyHash: khash, Vnode: vs[0]}
 
 	if opts.Source != nil {
 		// Broadcast to all vnodes skipping the source.
@@ -68,15 +67,15 @@ func (c *consistentTransport) ProposeTx(tx *txlog.Tx, opts utils.RequestOptions)
 }
 
 // GetTxBlock gets the first available non-erroring tx block
-func (c *consistentTransport) GetTxBlock(key []byte, opts utils.RequestOptions) (*txlog.TxBlock, *utils.ResponseMeta, error) {
+func (c *consistentTransport) GetTxBlock(key []byte, opts types.RequestOptions) (*types.TxBlock, *types.ResponseMeta, error) {
 	c.setDefaultOpts(&opts)
 
-	khash, vs, err := c.ring.Lookup(opts.PeerSetSize, key)
+	khash, vs, err := c.ring.Lookup(int(opts.PeerSetSize), key)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rmeta := &utils.ResponseMeta{KeyHash: khash}
+	rmeta := &types.ResponseMeta{KeyHash: khash}
 
 	for _, vn := range vs {
 		blk, er := c.transport.GetTxBlock(vn, key)
@@ -93,37 +92,37 @@ func (c *consistentTransport) GetTxBlock(key []byte, opts utils.RequestOptions) 
 }
 
 // GetTxBlockAll gets all copies of a TxBlock
-func (c *consistentTransport) GetTxBlockAll(key []byte, opts utils.RequestOptions) ([]*txlog.TxBlock, *utils.ResponseMeta, error) {
+func (c *consistentTransport) GetTxBlockAll(key []byte, opts types.RequestOptions) ([]*types.TxBlock, *types.ResponseMeta, error) {
 	c.setDefaultOpts(&opts)
 
-	khash, vs, err := c.ring.Lookup(opts.PeerSetSize, key)
+	khash, vs, err := c.ring.Lookup(int(opts.PeerSetSize), key)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rmeta := &utils.ResponseMeta{KeyHash: khash}
+	rmeta := &types.ResponseMeta{KeyHash: khash}
 
-	resp := make([]*txlog.TxBlock, len(vs))
+	resp := make([]*types.TxBlock, len(vs))
 	for i, vn := range vs {
 		blk, er := c.transport.GetTxBlock(vn, key)
 		if er != nil {
-			err = er
+			//err = er
 			continue
 		}
 		resp[i] = blk
 	}
-	return resp, rmeta, err
+	return resp, rmeta, nil
 }
 
-func (c *consistentTransport) NewTx(key []byte, opts utils.RequestOptions) (*txlog.Tx, *utils.ResponseMeta, error) {
+func (c *consistentTransport) NewTx(key []byte, opts types.RequestOptions) (*types.Tx, *types.ResponseMeta, error) {
 	c.setDefaultOpts(&opts)
 
-	khash, vs, err := c.ring.Lookup(opts.PeerSetSize, key)
+	khash, vs, err := c.ring.Lookup(int(opts.PeerSetSize), key)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rmeta := &utils.ResponseMeta{KeyHash: khash}
+	rmeta := &types.ResponseMeta{KeyHash: khash}
 
 	for _, vn := range vs {
 		tx, er := c.transport.NewTx(vn, key)
@@ -138,15 +137,15 @@ func (c *consistentTransport) NewTx(key []byte, opts utils.RequestOptions) (*txl
 	return nil, rmeta, err
 }
 
-func (c *consistentTransport) GetTx(txhash []byte, opts utils.RequestOptions) (*txlog.Tx, *utils.ResponseMeta, error) {
+func (c *consistentTransport) GetTx(txhash []byte, opts types.RequestOptions) (*types.Tx, *types.ResponseMeta, error) {
 	c.setDefaultOpts(&opts)
 
-	khash, vs, err := c.ring.Lookup(opts.PeerSetSize, opts.PeerSetKey)
+	khash, vs, err := c.ring.Lookup(int(opts.PeerSetSize), opts.PeerSetKey)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rmeta := &utils.ResponseMeta{KeyHash: khash}
+	rmeta := &types.ResponseMeta{KeyHash: khash}
 
 	for _, vn := range vs {
 		tx, er := c.transport.GetTx(vn, txhash)
@@ -162,17 +161,17 @@ func (c *consistentTransport) GetTx(txhash []byte, opts utils.RequestOptions) (*
 }
 
 // GetTxAll gets all copies of a tx.
-func (c *consistentTransport) GetTxAll(txhash []byte, opts utils.RequestOptions) ([]*txlog.Tx, *utils.ResponseMeta, error) {
+func (c *consistentTransport) GetTxAll(txhash []byte, opts types.RequestOptions) ([]*types.Tx, *types.ResponseMeta, error) {
 	c.setDefaultOpts(&opts)
 
-	khash, vs, err := c.ring.Lookup(opts.PeerSetSize, opts.PeerSetKey)
+	khash, vs, err := c.ring.Lookup(int(opts.PeerSetSize), opts.PeerSetKey)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rmeta := &utils.ResponseMeta{KeyHash: khash}
+	rmeta := &types.ResponseMeta{KeyHash: khash}
 
-	out := make([]*txlog.Tx, len(vs))
+	out := make([]*types.Tx, len(vs))
 	for i, vn := range vs {
 		tx, er := c.transport.GetTx(vn, txhash)
 		if er != nil {

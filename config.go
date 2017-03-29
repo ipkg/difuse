@@ -8,7 +8,7 @@ import (
 
 	chord "github.com/ipkg/go-chord"
 
-	"github.com/ipkg/difuse/txlog"
+	"github.com/ipkg/difuse/types"
 	"github.com/ipkg/difuse/utils"
 )
 
@@ -39,7 +39,7 @@ type Config struct {
 
 	Timeouts *NetTimeouts
 
-	Signator txlog.Signator
+	Signator types.Signator
 
 	FSM FSMFactory
 

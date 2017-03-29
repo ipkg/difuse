@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ipkg/difuse/types"
 	"github.com/ipkg/difuse/utils"
 )
 
@@ -12,7 +13,7 @@ import (
 type orphanTx struct {
 	lastSeen int64
 	votes    int
-	tx       *Tx
+	tx       *types.Tx
 }
 
 type txElector struct {
@@ -59,7 +60,7 @@ func (vc *txElector) reapOrphansOnce() {
 
 // submit a vote returning whether the tx needs to be queued for appension, broadcasted to the network
 // and/or repair/catchup is required.
-func (vc *txElector) vote(lastHash []byte, tx *Tx) (queue, broadcast, hashMismatch bool) {
+func (vc *txElector) vote(lastHash []byte, tx *types.Tx) (queue, broadcast, hashMismatch bool) {
 
 	txkey := hex.EncodeToString(tx.Hash())
 
@@ -68,7 +69,7 @@ func (vc *txElector) vote(lastHash []byte, tx *Tx) (queue, broadcast, hashMismat
 
 	v, ok := vc.m[txkey]
 	if !ok {
-		if !utils.EqualBytes(lastHash, tx.PrevHash) {
+		if !utils.EqualBytes(lastHash, tx.Header.PrevHash) {
 			hashMismatch = true
 			return
 		}

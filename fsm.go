@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/ipkg/difuse/txlog"
+	"github.com/ipkg/difuse/types"
 	"github.com/ipkg/difuse/utils"
 	chord "github.com/ipkg/go-chord"
 )
@@ -22,7 +23,7 @@ func (d *DummyFSM) Vnode() *chord.Vnode {
 }
 
 // Apply is a placeholder to satisfy the FSM interface if one is not provided.
-func (d *DummyFSM) Apply(tx *txlog.Tx) error {
+func (d *DummyFSM) Apply(tx *types.Tx) error {
 	log.Printf("INF vn=%s action=fsm-apply key=%s tx=%x", utils.ShortVnodeID(d.vn), tx.Key, tx.Hash()[:8])
 	return nil
 }

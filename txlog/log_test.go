@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ipkg/difuse/keypairs"
+	"github.com/ipkg/difuse/types"
 	"github.com/ipkg/difuse/utils"
 	chord "github.com/ipkg/go-chord"
 )
@@ -16,11 +17,11 @@ type testBroadcast struct {
 
 //func (tb *testBroadcast) Register(vn *chord.Vnode, st TxStore) {}
 
-func (tb *testBroadcast) GetTx(id []byte, opts utils.RequestOptions) (*Tx, *utils.ResponseMeta, error) {
+func (tb *testBroadcast) GetTx(id []byte, opts types.RequestOptions) (*types.Tx, *types.ResponseMeta, error) {
 	return nil, nil, fmt.Errorf("TBI")
 }
 
-func (tb *testBroadcast) ProposeTx(tx *Tx, opts utils.RequestOptions) (*utils.ResponseMeta, error) {
+func (tb *testBroadcast) ProposeTx(tx *types.Tx, opts types.RequestOptions) (*types.ResponseMeta, error) {
 	var err error
 	for i := 0; i < 3; i++ {
 		if er := tb.tl.ProposeTx(tx); er != nil {
@@ -39,9 +40,9 @@ func (tf *testFsm) Vnode() *chord.Vnode {
 	return tf.vn
 }
 
-func (tf *testFsm) Apply(ktx *Tx) error {
+func (tf *testFsm) Apply(ktx *types.Tx) error {
 	h := ktx.Hash()
-	tf.t.Logf("Applied k='%s' p=%x h=%x", ktx.Key, ktx.PrevHash[:8], h[:8])
+	tf.t.Logf("Applied k='%s' p=%x h=%x", ktx.Key, ktx.Header.PrevHash[:8], h[:8])
 	return nil
 }
 
@@ -92,7 +93,7 @@ func Test_TxLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tb.txs) == 0 {
+	if len(tb.TXs) == 0 {
 		t.Error("tx not written")
 	}
 

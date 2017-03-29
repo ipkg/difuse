@@ -15,7 +15,7 @@ package rpc
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import chord "github.com/ipkg/go-chord"
+import types "github.com/ipkg/difuse/types"
 
 import (
 	context "golang.org/x/net/context"
@@ -44,10 +44,10 @@ const _ = grpc.SupportPackageIsVersion4
 // Client API for DifuseRPC service
 
 type DifuseRPCClient interface {
-	GetTxBlockServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error)
-	GetTxServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error)
-	NewTxServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error)
-	ProposeTxServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error)
+	GetTxBlockServe(ctx context.Context, in *types.VnodeBytes, opts ...grpc.CallOption) (*types.TxBlock, error)
+	GetTxServe(ctx context.Context, in *types.VnodeBytes, opts ...grpc.CallOption) (*types.Tx, error)
+	NewTxServe(ctx context.Context, in *types.VnodeBytes, opts ...grpc.CallOption) (*types.Tx, error)
+	ProposeTxServe(ctx context.Context, in *types.VnodeTx, opts ...grpc.CallOption) (*types.VnodeBytes, error)
 	TakeoverTxBlocksServe(ctx context.Context, opts ...grpc.CallOption) (DifuseRPC_TakeoverTxBlocksServeClient, error)
 }
 
@@ -59,8 +59,8 @@ func NewDifuseRPCClient(cc *grpc.ClientConn) DifuseRPCClient {
 	return &difuseRPCClient{cc}
 }
 
-func (c *difuseRPCClient) GetTxBlockServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error) {
-	out := new(chord.Payload)
+func (c *difuseRPCClient) GetTxBlockServe(ctx context.Context, in *types.VnodeBytes, opts ...grpc.CallOption) (*types.TxBlock, error) {
+	out := new(types.TxBlock)
 	err := grpc.Invoke(ctx, "/rpc.DifuseRPC/GetTxBlockServe", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -68,8 +68,8 @@ func (c *difuseRPCClient) GetTxBlockServe(ctx context.Context, in *chord.Payload
 	return out, nil
 }
 
-func (c *difuseRPCClient) GetTxServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error) {
-	out := new(chord.Payload)
+func (c *difuseRPCClient) GetTxServe(ctx context.Context, in *types.VnodeBytes, opts ...grpc.CallOption) (*types.Tx, error) {
+	out := new(types.Tx)
 	err := grpc.Invoke(ctx, "/rpc.DifuseRPC/GetTxServe", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -77,8 +77,8 @@ func (c *difuseRPCClient) GetTxServe(ctx context.Context, in *chord.Payload, opt
 	return out, nil
 }
 
-func (c *difuseRPCClient) NewTxServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error) {
-	out := new(chord.Payload)
+func (c *difuseRPCClient) NewTxServe(ctx context.Context, in *types.VnodeBytes, opts ...grpc.CallOption) (*types.Tx, error) {
+	out := new(types.Tx)
 	err := grpc.Invoke(ctx, "/rpc.DifuseRPC/NewTxServe", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -86,8 +86,8 @@ func (c *difuseRPCClient) NewTxServe(ctx context.Context, in *chord.Payload, opt
 	return out, nil
 }
 
-func (c *difuseRPCClient) ProposeTxServe(ctx context.Context, in *chord.Payload, opts ...grpc.CallOption) (*chord.Payload, error) {
-	out := new(chord.Payload)
+func (c *difuseRPCClient) ProposeTxServe(ctx context.Context, in *types.VnodeTx, opts ...grpc.CallOption) (*types.VnodeBytes, error) {
+	out := new(types.VnodeBytes)
 	err := grpc.Invoke(ctx, "/rpc.DifuseRPC/ProposeTxServe", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -105,8 +105,8 @@ func (c *difuseRPCClient) TakeoverTxBlocksServe(ctx context.Context, opts ...grp
 }
 
 type DifuseRPC_TakeoverTxBlocksServeClient interface {
-	Send(*chord.Payload) error
-	CloseAndRecv() (*chord.Payload, error)
+	Send(*types.TxBlock) error
+	CloseAndRecv() (*types.VnodeBytes, error)
 	grpc.ClientStream
 }
 
@@ -114,15 +114,15 @@ type difuseRPCTakeoverTxBlocksServeClient struct {
 	grpc.ClientStream
 }
 
-func (x *difuseRPCTakeoverTxBlocksServeClient) Send(m *chord.Payload) error {
+func (x *difuseRPCTakeoverTxBlocksServeClient) Send(m *types.TxBlock) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *difuseRPCTakeoverTxBlocksServeClient) CloseAndRecv() (*chord.Payload, error) {
+func (x *difuseRPCTakeoverTxBlocksServeClient) CloseAndRecv() (*types.VnodeBytes, error) {
 	if err := x.ClientStream.CloseSend(); err != nil {
 		return nil, err
 	}
-	m := new(chord.Payload)
+	m := new(types.VnodeBytes)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -132,10 +132,10 @@ func (x *difuseRPCTakeoverTxBlocksServeClient) CloseAndRecv() (*chord.Payload, e
 // Server API for DifuseRPC service
 
 type DifuseRPCServer interface {
-	GetTxBlockServe(context.Context, *chord.Payload) (*chord.Payload, error)
-	GetTxServe(context.Context, *chord.Payload) (*chord.Payload, error)
-	NewTxServe(context.Context, *chord.Payload) (*chord.Payload, error)
-	ProposeTxServe(context.Context, *chord.Payload) (*chord.Payload, error)
+	GetTxBlockServe(context.Context, *types.VnodeBytes) (*types.TxBlock, error)
+	GetTxServe(context.Context, *types.VnodeBytes) (*types.Tx, error)
+	NewTxServe(context.Context, *types.VnodeBytes) (*types.Tx, error)
+	ProposeTxServe(context.Context, *types.VnodeTx) (*types.VnodeBytes, error)
 	TakeoverTxBlocksServe(DifuseRPC_TakeoverTxBlocksServeServer) error
 }
 
@@ -144,7 +144,7 @@ func RegisterDifuseRPCServer(s *grpc.Server, srv DifuseRPCServer) {
 }
 
 func _DifuseRPC_GetTxBlockServe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(chord.Payload)
+	in := new(types.VnodeBytes)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -156,13 +156,13 @@ func _DifuseRPC_GetTxBlockServe_Handler(srv interface{}, ctx context.Context, de
 		FullMethod: "/rpc.DifuseRPC/GetTxBlockServe",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DifuseRPCServer).GetTxBlockServe(ctx, req.(*chord.Payload))
+		return srv.(DifuseRPCServer).GetTxBlockServe(ctx, req.(*types.VnodeBytes))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _DifuseRPC_GetTxServe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(chord.Payload)
+	in := new(types.VnodeBytes)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -174,13 +174,13 @@ func _DifuseRPC_GetTxServe_Handler(srv interface{}, ctx context.Context, dec fun
 		FullMethod: "/rpc.DifuseRPC/GetTxServe",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DifuseRPCServer).GetTxServe(ctx, req.(*chord.Payload))
+		return srv.(DifuseRPCServer).GetTxServe(ctx, req.(*types.VnodeBytes))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _DifuseRPC_NewTxServe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(chord.Payload)
+	in := new(types.VnodeBytes)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -192,13 +192,13 @@ func _DifuseRPC_NewTxServe_Handler(srv interface{}, ctx context.Context, dec fun
 		FullMethod: "/rpc.DifuseRPC/NewTxServe",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DifuseRPCServer).NewTxServe(ctx, req.(*chord.Payload))
+		return srv.(DifuseRPCServer).NewTxServe(ctx, req.(*types.VnodeBytes))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _DifuseRPC_ProposeTxServe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(chord.Payload)
+	in := new(types.VnodeTx)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -210,7 +210,7 @@ func _DifuseRPC_ProposeTxServe_Handler(srv interface{}, ctx context.Context, dec
 		FullMethod: "/rpc.DifuseRPC/ProposeTxServe",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DifuseRPCServer).ProposeTxServe(ctx, req.(*chord.Payload))
+		return srv.(DifuseRPCServer).ProposeTxServe(ctx, req.(*types.VnodeTx))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -220,8 +220,8 @@ func _DifuseRPC_TakeoverTxBlocksServe_Handler(srv interface{}, stream grpc.Serve
 }
 
 type DifuseRPC_TakeoverTxBlocksServeServer interface {
-	SendAndClose(*chord.Payload) error
-	Recv() (*chord.Payload, error)
+	SendAndClose(*types.VnodeBytes) error
+	Recv() (*types.TxBlock, error)
 	grpc.ServerStream
 }
 
@@ -229,12 +229,12 @@ type difuseRPCTakeoverTxBlocksServeServer struct {
 	grpc.ServerStream
 }
 
-func (x *difuseRPCTakeoverTxBlocksServeServer) SendAndClose(m *chord.Payload) error {
+func (x *difuseRPCTakeoverTxBlocksServeServer) SendAndClose(m *types.VnodeBytes) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *difuseRPCTakeoverTxBlocksServeServer) Recv() (*chord.Payload, error) {
-	m := new(chord.Payload)
+func (x *difuseRPCTakeoverTxBlocksServeServer) Recv() (*types.TxBlock, error) {
+	m := new(types.TxBlock)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -275,16 +275,18 @@ var _DifuseRPC_serviceDesc = grpc.ServiceDesc{
 func init() { proto.RegisterFile("rpc.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 173 bytes of a gzipped FileDescriptorProto
+	// 196 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x2c, 0x2a, 0x48, 0xd6,
-	0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x2e, 0x2a, 0x48, 0x96, 0x52, 0x4a, 0xcf, 0x2c, 0xc9,
-	0x28, 0x4d, 0xd2, 0x4b, 0xce, 0xcf, 0xd5, 0xcf, 0x2c, 0xc8, 0x4e, 0xd7, 0x4f, 0xcf, 0xd7, 0x4d,
-	0xce, 0xc8, 0x2f, 0x4a, 0xd1, 0xcf, 0x4b, 0x2d, 0x81, 0x28, 0x34, 0x9a, 0xc8, 0xc4, 0xc5, 0xe9,
-	0x92, 0x99, 0x56, 0x5a, 0x9c, 0x1a, 0x14, 0xe0, 0x2c, 0x64, 0xcc, 0xc5, 0xef, 0x9e, 0x5a, 0x12,
-	0x52, 0xe1, 0x94, 0x93, 0x9f, 0x9c, 0x1d, 0x9c, 0x5a, 0x54, 0x96, 0x2a, 0xc4, 0xa7, 0x07, 0xd6,
-	0xa2, 0x17, 0x90, 0x58, 0x99, 0x93, 0x9f, 0x98, 0x22, 0x85, 0xc6, 0x57, 0x62, 0x10, 0xd2, 0xe3,
-	0xe2, 0x02, 0x6b, 0x22, 0x41, 0xbd, 0x5f, 0x6a, 0x39, 0xf1, 0xea, 0x8d, 0xb8, 0xf8, 0x02, 0x8a,
-	0xf2, 0x0b, 0xf2, 0x8b, 0x53, 0x89, 0xd7, 0x63, 0xcd, 0x25, 0x1a, 0x92, 0x98, 0x9d, 0x9a, 0x5f,
-	0x96, 0x5a, 0x04, 0xf5, 0x4d, 0x31, 0x91, 0x5a, 0x35, 0x18, 0x93, 0xd8, 0xc0, 0x41, 0x63, 0x0c,
-	0x08, 0x00, 0x00, 0xff, 0xff, 0xa3, 0x9e, 0x3b, 0xa7, 0x50, 0x01, 0x00, 0x00,
+	0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x2e, 0x2a, 0x48, 0x96, 0xd2, 0x48, 0xcf, 0x2c, 0xc9,
+	0x28, 0x4d, 0xd2, 0x4b, 0xce, 0xcf, 0xd5, 0xcf, 0x2c, 0xc8, 0x4e, 0xd7, 0x4f, 0xc9, 0x4c, 0x2b,
+	0x2d, 0x4e, 0xd5, 0x2f, 0xa9, 0x2c, 0x48, 0x2d, 0x86, 0x90, 0x10, 0xe5, 0x46, 0xd3, 0x98, 0xb8,
+	0x38, 0x5d, 0xc0, 0x92, 0x41, 0x01, 0xce, 0x42, 0x66, 0x5c, 0xfc, 0xee, 0xa9, 0x25, 0x21, 0x15,
+	0x4e, 0x39, 0xf9, 0xc9, 0xd9, 0xc1, 0xa9, 0x45, 0x65, 0xa9, 0x42, 0x82, 0x7a, 0x10, 0xe5, 0x61,
+	0x79, 0xf9, 0x29, 0xa9, 0x4e, 0x95, 0x25, 0xa9, 0xc5, 0x52, 0x7c, 0x50, 0x21, 0xa8, 0x3a, 0x25,
+	0x06, 0x21, 0x1d, 0x2e, 0x2e, 0xb0, 0x3e, 0x9c, 0x5a, 0x38, 0xe1, 0x5a, 0x20, 0xaa, 0xfd, 0x52,
+	0xcb, 0x89, 0x55, 0x6d, 0xca, 0xc5, 0x17, 0x50, 0x94, 0x5f, 0x90, 0x5f, 0x9c, 0x0a, 0xd3, 0xc1,
+	0x87, 0xac, 0x23, 0xa4, 0x42, 0x0a, 0xd3, 0x04, 0x25, 0x06, 0x21, 0x3b, 0x2e, 0xd1, 0x90, 0xc4,
+	0xec, 0xd4, 0xfc, 0xb2, 0xd4, 0x22, 0xa8, 0x3b, 0x8b, 0x51, 0x75, 0x43, 0x45, 0xb1, 0xea, 0xd6,
+	0x60, 0x4c, 0x62, 0x03, 0x87, 0x8f, 0x31, 0x20, 0x00, 0x00, 0xff, 0xff, 0xa3, 0xd2, 0xca, 0xc3,
+	0x5b, 0x01, 0x00, 0x00,
 }

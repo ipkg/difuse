@@ -5,7 +5,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/ipkg/difuse/txlog"
+	"github.com/ipkg/difuse/types"
 	"github.com/ipkg/difuse/utils"
 	chord "github.com/ipkg/go-chord"
 )
@@ -24,28 +24,28 @@ func newLocalTransport(remote Transport) *localTransport {
 	return &localTransport{remote: remote, local: make(localStore)}
 }
 
-func (lt *localTransport) ProposeTx(vn *chord.Vnode, tx *txlog.Tx) error {
+func (lt *localTransport) ProposeTx(vn *chord.Vnode, tx *types.Tx) error {
 	if vn.Host == lt.host {
 		return lt.local.ProposeTx(vn, tx)
 	}
 	return lt.remote.ProposeTx(vn, tx)
 }
 
-func (lt *localTransport) GetTx(vn *chord.Vnode, txhash []byte) (*txlog.Tx, error) {
+func (lt *localTransport) GetTx(vn *chord.Vnode, txhash []byte) (*types.Tx, error) {
 	if vn.Host == lt.host {
 		return lt.local.GetTx(vn, txhash)
 	}
 	return lt.remote.GetTx(vn, txhash)
 }
 
-func (lt *localTransport) NewTx(vn *chord.Vnode, key []byte) (*txlog.Tx, error) {
+func (lt *localTransport) NewTx(vn *chord.Vnode, key []byte) (*types.Tx, error) {
 	if vn.Host == lt.host {
 		return lt.local.NewTx(vn, key)
 	}
 	return lt.remote.NewTx(vn, key)
 }
 
-func (lt *localTransport) GetTxBlock(vn *chord.Vnode, key []byte) (*txlog.TxBlock, error) {
+func (lt *localTransport) GetTxBlock(vn *chord.Vnode, key []byte) (*types.TxBlock, error) {
 	if vn.Host == lt.host {
 		return lt.local.GetTxBlock(vn, key)
 	}

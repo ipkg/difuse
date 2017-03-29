@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package types;
+
+import "github.com/ipkg/go-chord/net.proto";
+
+enum TxBlockMode {
+    NORMAL = 0;
+    TRANSITION = 1;
+    TAKEOVER = 2;
+    OFFLINE = 3;
+}
+
+enum Consistency {
+    LAZY = 0;
+    QUORUM = 1;
+    ALL = 2;
+}
+
+message RequestOptions {
+    Consistency Consistency = 1;
+	int32 PeerSetSize = 2;
+	bytes PeerSetKey = 3;
+	chord.Vnode Source = 4;
+}
+
+message ResponseMeta {
+    chord.Vnode Vnode = 1;
+    bytes KeyHash = 2;
+}
+
+message VnodeBytes {
+    chord.Vnode Vnode = 1;
+    bytes Bytes = 2;
+}
+
+message VnodeTx {
+    chord.Vnode Vnode = 1;
+    Tx Tx = 3;
+}
+
+message TxBlock {
+    bytes Key = 1;
+    int32 Mode = 2;
+    repeated bytes TXs = 3;
+    bytes Root = 4;
+}
+
+message TxHeader {
+    bytes PrevHash = 1;
+    bytes Source = 2;
+    bytes Destination = 3;
+    uint64 Timestamp = 4;
+    uint64 Height = 5;
+}
+
+message Tx {
+    TxHeader Header = 1;
+    bytes Signature = 2;
+    bytes Key = 3;
+    bytes Data = 4;
+}

@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"sync"
+
+	"github.com/ipkg/difuse/types"
 )
 
 var (
@@ -15,41 +17,41 @@ var (
 // TxBlockStore implements a store for transaction blocks.
 type TxBlockStore interface {
 	// Create a key if it doesn't exist and set the mode
-	Create(key []byte, mode TxBlockMode) error
+	Create(key []byte, mode types.TxBlockMode) error
 	// Add tx block to store
-	Set(tb *TxBlock) error
+	Set(tb *types.TxBlock) error
 	// Get key for the tx.  This is the object encompassing the tx's for a key.
-	Get(key []byte) (*TxBlock, error)
+	Get(key []byte) (*types.TxBlock, error)
 	// Atomically return the mode
-	Mode(key []byte) (TxBlockMode, error)
+	Mode(key []byte) (types.TxBlockMode, error)
 	// Atomically sets the key mode
-	SetMode(key []byte, mode TxBlockMode) error
+	SetMode(key []byte, mode types.TxBlockMode) error
 	// Return a consistent snapshot
 	Snapshot() (TxBlockStore, error)
 	// Iterator
-	Iter(func(*TxBlock) error) error
+	Iter(func(*types.TxBlock) error) error
 }
 
 // TxStore implements a store interface for transactions.
 type TxStore interface {
-	Get(txhash []byte) (*Tx, error)
-	Set(tx *Tx) error
+	Get(txhash []byte) (*types.Tx, error)
+	Set(tx *types.Tx) error
 }
 
 // MemTxBlockStore implements an in-memory transaction block store
 type MemTxBlockStore struct {
 	mu sync.RWMutex
-	m  map[string]*TxBlock
+	m  map[string]*types.TxBlock
 }
 
 // NewMemTxBlockStore instantiates a new in-memory transaction block store.
 func NewMemTxBlockStore() *MemTxBlockStore {
-	return &MemTxBlockStore{m: make(map[string]*TxBlock)}
+	return &MemTxBlockStore{m: make(map[string]*types.TxBlock)}
 }
 
 // Set sets the given tx block to the store.  If it already exists it returns an error.
-func (m *MemTxBlockStore) Set(tb *TxBlock) error {
-	k := string(tb.Key())
+func (m *MemTxBlockStore) Set(tb *types.TxBlock) error {
+	k := string(tb.Key)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -60,7 +62,7 @@ func (m *MemTxBlockStore) Set(tb *TxBlock) error {
 }
 
 // Create creates a new tx block for the key if it doesn't exist and sets the mode on the block.
-func (m *MemTxBlockStore) Create(key []byte, mode TxBlockMode) error {
+func (m *MemTxBlockStore) Create(key []byte, mode types.TxBlockMode) error {
 	k := string(key)
 
 	m.mu.Lock()
@@ -74,15 +76,15 @@ func (m *MemTxBlockStore) Create(key []byte, mode TxBlockMode) error {
 		return nil
 	}
 
-	txb := NewTxBlock(key)
-	txb.mode = int32(mode)
+	txb := types.NewTxBlock(key)
+	txb.Mode = int32(mode)
 	m.m[k] = txb
 
 	return nil
 }
 
 // Get retrieves a transaction block by the given key.
-func (m *MemTxBlockStore) Get(key []byte) (*TxBlock, error) {
+func (m *MemTxBlockStore) Get(key []byte) (*types.TxBlock, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -107,7 +109,7 @@ func (m *MemTxBlockStore) Snapshot() (TxBlockStore, error) {
 }
 
 // Iter iterates over all tx blocks.  This call does not perform any locking and should be used accordling.
-func (m *MemTxBlockStore) Iter(f func(*TxBlock) error) error {
+func (m *MemTxBlockStore) Iter(f func(*types.TxBlock) error) error {
 	for _, v := range m.m {
 		if err := f(v); err != nil {
 			return err
@@ -117,19 +119,19 @@ func (m *MemTxBlockStore) Iter(f func(*TxBlock) error) error {
 }
 
 // Mode retrieves the mode of the transaction block
-func (m *MemTxBlockStore) Mode(key []byte) (TxBlockMode, error) {
+func (m *MemTxBlockStore) Mode(key []byte) (types.TxBlockMode, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	if v, ok := m.m[string(key)]; ok {
-		return v.Mode(), nil
+		return v.ReadMode(), nil
 	}
 
-	return TxBlockMode(-1), ErrTxBlockNotFound
+	return types.TxBlockMode(-1), ErrTxBlockNotFound
 }
 
 // SetMode sets the mode of a block with the given key.
-func (m *MemTxBlockStore) SetMode(key []byte, mode TxBlockMode) error {
+func (m *MemTxBlockStore) SetMode(key []byte, mode types.TxBlockMode) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -143,16 +145,16 @@ func (m *MemTxBlockStore) SetMode(key []byte, mode TxBlockMode) error {
 // MemTxStore implements an in-memory transaction store
 type MemTxStore struct {
 	mu sync.RWMutex
-	m  map[string]*Tx
+	m  map[string]*types.Tx
 }
 
 // NewMemTxStore instantiates a new in-memory transaction store.
 func NewMemTxStore() *MemTxStore {
-	return &MemTxStore{m: make(map[string]*Tx)}
+	return &MemTxStore{m: make(map[string]*types.Tx)}
 }
 
 // Get retrieves a transaction by it's id hash from the store.
-func (m *MemTxStore) Get(txhash []byte) (*Tx, error) {
+func (m *MemTxStore) Get(txhash []byte) (*types.Tx, error) {
 	h := hex.EncodeToString(txhash)
 
 	m.mu.RLock()
@@ -167,7 +169,7 @@ func (m *MemTxStore) Get(txhash []byte) (*Tx, error) {
 
 // Set sets a transaction on the store.  Transaction hash's are assumed to be unique as such, a check
 // for the existence of the hash id is not performed.
-func (m *MemTxStore) Set(tx *Tx) error {
+func (m *MemTxStore) Set(tx *types.Tx) error {
 	h := hex.EncodeToString(tx.Hash())
 
 	m.mu.Lock()

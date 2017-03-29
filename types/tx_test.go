@@ -1,4 +1,4 @@
-package txlog
+package types
 
 import "testing"
 
