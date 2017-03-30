@@ -8,6 +8,11 @@ import (
 	chord "github.com/ipkg/go-chord"
 )
 
+type Response struct {
+	Meta *types.ResponseMeta
+	Data interface{}
+}
+
 // consistentTransport provides consistent operations around the ring.
 type consistentTransport struct {
 	conf      *chord.Config
@@ -92,26 +97,24 @@ func (c *consistentTransport) GetTxBlock(key []byte, opts types.RequestOptions) 
 }
 
 // GetTxBlockAll gets all copies of a TxBlock
-func (c *consistentTransport) GetTxBlockAll(key []byte, opts types.RequestOptions) ([]*types.TxBlock, *types.ResponseMeta, error) {
+func (c *consistentTransport) GetTxBlockAll(key []byte, opts types.RequestOptions) ([]*Response, error) {
 	c.setDefaultOpts(&opts)
 
 	khash, vs, err := c.ring.Lookup(int(opts.PeerSetSize), key)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	rmeta := &types.ResponseMeta{KeyHash: khash}
-
-	resp := make([]*types.TxBlock, len(vs))
+	resp := make([]*Response, len(vs))
 	for i, vn := range vs {
 		blk, er := c.transport.GetTxBlock(vn, key)
 		if er != nil {
-			//err = er
-			continue
+			resp[i] = &Response{Data: er, Meta: &types.ResponseMeta{Vnode: vn, KeyHash: khash}}
+		} else {
+			resp[i] = &Response{Data: blk, Meta: &types.ResponseMeta{Vnode: vn, KeyHash: khash}}
 		}
-		resp[i] = blk
 	}
-	return resp, rmeta, nil
+	return resp, nil
 }
 
 func (c *consistentTransport) NewTx(key []byte, opts types.RequestOptions) (*types.Tx, *types.ResponseMeta, error) {
@@ -161,25 +164,23 @@ func (c *consistentTransport) GetTx(txhash []byte, opts types.RequestOptions) (*
 }
 
 // GetTxAll gets all copies of a tx.
-func (c *consistentTransport) GetTxAll(txhash []byte, opts types.RequestOptions) ([]*types.Tx, *types.ResponseMeta, error) {
+func (c *consistentTransport) GetTxAll(txhash []byte, opts types.RequestOptions) ([]*Response, error) {
 	c.setDefaultOpts(&opts)
 
 	khash, vs, err := c.ring.Lookup(int(opts.PeerSetSize), opts.PeerSetKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	rmeta := &types.ResponseMeta{KeyHash: khash}
-
-	out := make([]*types.Tx, len(vs))
+	resp := make([]*Response, len(vs))
 	for i, vn := range vs {
 		tx, er := c.transport.GetTx(vn, txhash)
 		if er != nil {
-			err = er
-			continue
+			resp[i] = &Response{Meta: &types.ResponseMeta{Vnode: vn, KeyHash: khash}, Data: er}
+		} else {
+			resp[i] = &Response{Meta: &types.ResponseMeta{Vnode: vn, KeyHash: khash}, Data: tx}
 		}
-		out[i] = tx
 	}
 
-	return out, rmeta, err
+	return resp, nil
 }

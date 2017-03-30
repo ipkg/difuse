@@ -53,7 +53,7 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		opts := types.RequestOptions{Consistency: h.parseConsistency(r)}
 		if opts.Consistency == types.Consistency_ALL {
-			data, meta, err = h.cs.GetTxBlockAll(key, opts)
+			data, err = h.cs.GetTxBlockAll(key, opts)
 		} else {
 			data, meta, err = h.cs.GetTxBlock(key, opts)
 		}
@@ -67,7 +67,7 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		opts := types.RequestOptions{Consistency: h.parseConsistency(r)}
 		if opts.Consistency == types.Consistency_ALL {
-			data, meta, err = h.cs.GetTxAll(txhash, opts)
+			data, err = h.cs.GetTxAll(txhash, opts)
 		} else {
 			data, meta, err = h.cs.GetTx(txhash, opts)
 		}
