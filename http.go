@@ -3,6 +3,7 @@ package difuse
 import (
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
@@ -52,6 +53,12 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch {
+	case strings.HasPrefix(urlPath, "status"):
+		out := map[string]interface{}{}
+		out["Vnodes"], err = h.cs.ring.ListVnodes(h.cs.conf.Hostname)
+		data = out
+		log.Println(data, err)
+
 	case strings.HasPrefix(urlPath, "txblock/"):
 		sid := strings.TrimPrefix(urlPath, "txblock/")
 		key := []byte(sid)
