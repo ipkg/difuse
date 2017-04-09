@@ -3,6 +3,8 @@ Distributed peer-to-peer key based transaction log.
 
 ### To Do
 
-- [ ] Clean shutdown
+- [ ] Graceful clean shutdown
 - [ ] Corner-case replication re-conciliation
-- [ ] Node leave
+- [ ] Use height for further consistency
+- [ ] Graceful node leave
+- [ ] Retry join
