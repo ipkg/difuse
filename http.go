@@ -96,10 +96,11 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if meta.Vnode != nil {
-		w.Header().Set("Vnode", utils.LongVnodeID(meta.Vnode))
+	if meta != nil {
+		if meta.Vnode != nil {
+			w.Header().Set("Vnode", utils.LongVnodeID(meta.Vnode))
+		}
+		w.Header().Set("Key-Hash", hex.EncodeToString(meta.KeyHash))
 	}
-	w.Header().Set("Key-Hash", hex.EncodeToString(meta.KeyHash))
-
 	w.Write(b)
 }
