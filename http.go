@@ -3,6 +3,7 @@ package difuse
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -26,16 +27,10 @@ func NewHTTPAdminServer(dif *Difuse, prefix string) *HTTPAdminServer {
 
 func (h *HTTPAdminServer) parseConsistency(r *http.Request) types.Consistency {
 	c, ok := r.URL.Query()["consistency"]
-	if ok && len(c) > 0 {
-		switch c[0] {
-		case "all":
-			return types.Consistency_ALL
-		case "quorum":
-			return types.Consistency_QUORUM
-		}
+	if !ok {
+		return types.Consistency_LAZY
 	}
-
-	return types.Consistency_LAZY
+	return ParseConsistency(c[0])
 }
 
 func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -61,11 +56,15 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		sid := strings.TrimPrefix(urlPath, "txblock/")
 		key := []byte(sid)
 
-		opts := types.RequestOptions{Consistency: h.parseConsistency(r)}
-		if opts.Consistency == types.Consistency_ALL {
-			data, err = h.cs.GetTxBlockAll(key, opts)
+		if consistency := h.parseConsistency(r); consistency >= 0 {
+			opts := types.RequestOptions{Consistency: h.parseConsistency(r)}
+			if opts.Consistency == types.Consistency_ALL {
+				data, err = h.cs.GetTxBlockAll(key, opts)
+			} else {
+				data, meta, err = h.cs.GetTxBlock(key, opts)
+			}
 		} else {
-			data, meta, err = h.cs.GetTxBlock(key, opts)
+			err = fmt.Errorf("invalid consistency")
 		}
 
 	case strings.HasPrefix(urlPath, "tx/"):
@@ -75,11 +74,15 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		opts := types.RequestOptions{Consistency: h.parseConsistency(r)}
-		if opts.Consistency == types.Consistency_ALL {
-			data, err = h.cs.GetTxAll(txhash, opts)
+		if consistency := h.parseConsistency(r); consistency >= 0 {
+			opts := types.RequestOptions{Consistency: h.parseConsistency(r)}
+			if opts.Consistency == types.Consistency_ALL {
+				data, err = h.cs.GetTxAll(txhash, opts)
+			} else {
+				data, meta, err = h.cs.GetTx(txhash, opts)
+			}
 		} else {
-			data, meta, err = h.cs.GetTx(txhash, opts)
+			err = fmt.Errorf("invalid consistency")
 		}
 
 	}
