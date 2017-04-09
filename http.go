@@ -46,6 +46,11 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		meta    *types.ResponseMeta
 	)
 
+	if r.Method == "OPTIONS" {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		return
+	}
+
 	switch {
 	case strings.HasPrefix(urlPath, "txblock/"):
 		sid := strings.TrimPrefix(urlPath, "txblock/")
@@ -102,5 +107,7 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Key-Hash", hex.EncodeToString(meta.KeyHash))
 	}
+
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Write(b)
 }
