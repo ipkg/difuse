@@ -29,7 +29,10 @@ func (h *HTTPAdminServer) parseConsistency(r *http.Request) types.Consistency {
 	c, ok := r.URL.Query()["consistency"]
 	if !ok {
 		return types.Consistency_LAZY
+	} else if len(c) < 1 {
+		c = []string{""}
 	}
+
 	return ParseConsistency(c[0])
 }
 
