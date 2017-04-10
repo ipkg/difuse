@@ -12,6 +12,7 @@ BUILD_CMD = CGO_ENABLED=0 go build -a -tags netgo -installsuffix netgo
 
 clean:
 	rm -f testube
+	go clean -i ./...
 
 protoc-types:
 	@rm -f types/types.pb.go

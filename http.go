@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -62,7 +63,17 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if consistency := h.parseConsistency(r); consistency >= 0 {
 			opts := types.RequestOptions{Consistency: h.parseConsistency(r)}
 			if opts.Consistency == types.Consistency_ALL {
-				data, err = h.cs.GetTxBlockAll(key, opts)
+				var rsp []*Response
+				if rsp, err = h.cs.GetTxBlockAll(key, opts); err == nil {
+					for i, d := range rsp {
+						log.Println(d.Data)
+						if e, ok := d.Data.(error); ok {
+							rsp[i].Data = map[string]string{"error": e.Error()}
+						}
+					}
+					data = rsp
+				}
+
 			} else {
 				data, meta, err = h.cs.GetTxBlock(key, opts)
 			}
@@ -80,7 +91,15 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if consistency := h.parseConsistency(r); consistency >= 0 {
 			opts := types.RequestOptions{Consistency: h.parseConsistency(r)}
 			if opts.Consistency == types.Consistency_ALL {
-				data, err = h.cs.GetTxAll(txhash, opts)
+				var rsp []*Response
+				if rsp, err = h.cs.GetTxAll(txhash, opts); err == nil {
+					for i, d := range rsp {
+						if e, ok := d.Data.(error); ok {
+							rsp[i].Data = map[string]string{"error": e.Error()}
+						}
+					}
+					data = rsp
+				}
 			} else {
 				data, meta, err = h.cs.GetTx(txhash, opts)
 			}
