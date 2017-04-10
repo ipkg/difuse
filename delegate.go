@@ -8,12 +8,6 @@ import (
 	"github.com/ipkg/difuse/utils"
 )
 
-// Init is the chord delegate
-func (s *Difuse) Init(vn *chord.Vnode) {
-	//vns := NewVnodeStore(vn)
-	//s.transport.Register(vn, vns)
-}
-
 // NewPredecessor is called when a new predecessor is found
 func (s *Difuse) NewPredecessor(local, remoteNew, remotePrev *chord.Vnode) {
 	log.Printf("INF action=predecessor src=%s dst=%s", utils.ShortVnodeID(local), utils.ShortVnodeID(remoteNew))

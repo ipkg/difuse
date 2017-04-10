@@ -76,7 +76,7 @@ func (cfg *Config) SetPeers(peers string) {
 
 // ValidateAddrs validates both bind and adv addresses and set adv if possible.
 func (cfg *Config) ValidateAddrs() error {
-	if _, err := net.ResolveUDPAddr("udp4", cfg.BindAddr); err != nil {
+	if _, err := net.ResolveTCPAddr("tcp4", cfg.BindAddr); err != nil {
 		return err
 	}
 
