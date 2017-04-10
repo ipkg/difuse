@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
@@ -66,7 +65,6 @@ func (h *HTTPAdminServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				var rsp []*Response
 				if rsp, err = h.cs.GetTxBlockAll(key, opts); err == nil {
 					for i, d := range rsp {
-						log.Println(d.Data)
 						if e, ok := d.Data.(error); ok {
 							rsp[i].Data = map[string]string{"error": e.Error()}
 						}
